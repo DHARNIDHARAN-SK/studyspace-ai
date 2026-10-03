@@ -3,9 +3,17 @@ import { AuthProvider } from "../features/auth/AuthContext";
 import { ProjectProvider } from "../features/projects/ProjectContext";
 import { ProtectedRoute } from "../features/auth/ProtectedRoute";
 import { AppShell } from "../components/layout/AppShell";
+import { LandingPage } from "../pages/LandingPage";
+import { AboutPage } from "../pages/AboutPage";
+import { FeaturesPage } from "../pages/FeaturesPage";
+import { ContactPage } from "../pages/ContactPage";
 import { LoginPage } from "../pages/LoginPage";
+import { SignUpPage } from "../pages/SignUpPage";
 import { DashboardPage } from "../pages/DashboardPage";
+import { ProjectsPage } from "../pages/ProjectsPage";
 import { ProjectPage } from "../pages/ProjectPage";
+import { SettingsPage } from "../pages/SettingsPage";
+import { DeveloperPage } from "../pages/DeveloperPage";
 
 export function App() {
   return (
@@ -13,21 +21,27 @@ export function App() {
       <AuthProvider>
         <ProjectProvider>
           <Routes>
-            {/* Public Auth Route */}
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/features" element={<FeaturesPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignUpPage />} />
 
-            {/* Protected Application Routes */}
+            {/* Authenticated Application Routes */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppShell />}>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/projects" element={<DashboardPage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/projects/:projectId" element={<ProjectPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/developer" element={<DeveloperPage />} />
               </Route>
             </Route>
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            {/* Catch-all Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ProjectProvider>
       </AuthProvider>

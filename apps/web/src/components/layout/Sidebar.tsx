@@ -5,8 +5,10 @@ import {
   ChevronDown,
   Folder,
   Home,
+  Key,
   LogOut,
   Plus,
+  Settings,
   User,
   X,
 } from "lucide-react";
@@ -35,6 +37,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navItems = [
     { label: "Dashboard", icon: Home, path: "/dashboard" },
     { label: "Projects", icon: Folder, path: "/projects" },
+    { label: "Developer API", icon: Key, path: "/developer" },
+    { label: "Settings", icon: Settings, path: "/settings" },
   ];
 
   return (

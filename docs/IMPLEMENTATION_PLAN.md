@@ -37,9 +37,26 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 - [x] Typed SQLAlchemy 2.0 async ORM models, async engine, session lifecycle, and connection health probes.
 - [x] Automated unit and integration test suite (24/24 tests passing).
 
+## Phase 4: Frontend SaaS UI & Project Workspace [COMPLETED]
+- [x] Public marketing and informational routes (`/`, `/about`, `/features`, `/contact`).
+- [x] Student authentication and registration flows (`/login`, `/signup`) with validation and tenant switcher.
+- [x] Authenticated application shell with persistent desktop sidebar, mobile responsive drawer, and project switcher.
+- [x] Student overview dashboard with real project metrics and empty state CTA.
+- [x] Dedicated projects directory (`/projects`) with live search, discipline pills, edit and delete modals.
+- [x] Complete project workspace (`/projects/:projectId`) with 5 dedicated tabs:
+  - Grounded Chat: conversation sidebar, query rewriter toggle, verifiable citation inspector, and composer.
+  - Sources & Documents: document list with metadata (file size, slide/page count) and indexing status badges.
+  - Revision Checklist: syllabus topic progress bar, status selector, and topic creation modal.
+  - Quizzes: interactive quiz assessment with protected answer keys and post-submission explanations.
+  - Study Guides: formatted review canvas, printable view, and export notice.
+- [x] Settings console (`/settings`) for student profile, citation style, and session controls.
+- [x] Developer platform API console (`/developer`) for scoped API key generation and sample cURL requests.
+- [x] End-to-end verification of 11 critical flows via Playwright MCP.
+- [x] Production build verified (`tsc -b && vite build` passing).
+
 ---
 
-## Phase 4: Document Ingestion, Parsing, Chunking & Celery Workers
+## Phase 5: Document Ingestion, Parsing, Chunking & Celery Workers
 - [ ] Asynchronous Celery ingestion worker setup with Redis broker.
 - [ ] Format parsers for `.pdf` (up to 500-page target with batching and scanned detection), `.docx`, `.pptx`, `.txt`, `.md`.
 - [ ] Structure-aware chunking pipeline retaining page/slide/section provenance.
@@ -48,7 +65,7 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 
 ---
 
-## Phase 4: Embeddings, Vector Storage & Hybrid Retrieval
+## Phase 6: Embeddings, Vector Storage & Hybrid Retrieval
 - [ ] Provider abstraction for Embedding models (local Ollama nomic-embed-text / hosted alternatives).
 - [ ] Batch vector generation and pgvector storage with dimension consistency checks.
 - [ ] PostgreSQL full-text search index (`tsvector`) generation for lexical search.
@@ -57,7 +74,7 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 
 ---
 
-## Phase 5: Fusion, Reranking, Grounded Generation & Citations
+## Phase 7: Fusion, Reranking, Grounded Generation & Citations
 - [ ] Reciprocal Rank Fusion (RRF) combining dense and lexical search candidates.
 - [ ] Reranking provider interface and candidate filtering.
 - [ ] Generation provider adapters for local Ollama (Llama 3.2) and hosted Gemini.

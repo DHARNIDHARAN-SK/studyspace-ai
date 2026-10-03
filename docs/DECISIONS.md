@@ -106,3 +106,27 @@ This document records the architectural and engineering decisions actually made 
   `workspaces/{workspace_id}/exports/{export_id}/{filename}`.
   All upload operations must sanitize filenames, strip traversal elements (`..`, `\`, leading `/`, null bytes), validate UUID segments, and enforce workspace ownership before any storage or database write.
 - **Consequences:** Eliminates storage traversal, cross-workspace leakage, and namespace collisions across private buckets.
+
+---
+
+## ADR-012: Full SaaS Routing Structure (Public Marketing & Protected Learning Shell)
+- **Date:** 2026-10-03
+- **Context:** Students and prospective academic partners require public discovery pages (`/`, `/about`, `/features`, `/contact`) while students need a protected application shell (`/dashboard`, `/projects`, `/projects/:projectId`, `/settings`, `/developer`).
+- **Decision:** Implement client-side routing using `react-router-dom` with separate layout trees: public pages use `PublicHeader` and `PublicFooter`, while authenticated routes are nested within `ProtectedRoute` and `AppShell`. Authenticated visitors accessing `/login` or `/signup` are automatically redirected to `/dashboard`.
+- **Consequences:** Clean separation between unauthenticated marketing discovery and private study tools.
+
+---
+
+## ADR-013: Modular Project Workspace Tabs with Explicit Roadmap Boundaries
+- **Date:** 2026-10-03
+- **Context:** The project workspace must host 5 distinct learning tools (`Chat`, `Sources`, `Revision`, `Quizzes`, `Study Guides`) without implementing backend ingestion or RAG pipelines prematurely.
+- **Decision:** Deconstruct the workspace into dedicated, typed React tab components. For capabilities activating in later roadmap phases (such as Celery document ingestion in Phase 5, RAG retrieval in Phase 6, or PDF export in Phase 7), present clean UI controls with informative boundary notices rather than fake mock content.
+- **Consequences:** Provides a polished, accessible, production-grade interface that seamlessly connects to backend microservices as they are built.
+
+---
+
+## ADR-014: Protected Answer Key Architecture for Source-Grounded Quizzes
+- **Date:** 2026-10-03
+- **Context:** Master Architecture Section 4.4 and 10 mandate that students must not see quiz answer keys or explanations prior to attempt submission.
+- **Decision:** In the frontend quiz interface, hide expected answers and detailed syllabus citation explanations during question selection. The evaluation UI only reveals correctness badges and underlying citations once the user triggers "Submit Attempt".
+- **Consequences:** Enforces genuine active recall for students, aligning frontend behavior with the upcoming backend quiz evaluation service.
