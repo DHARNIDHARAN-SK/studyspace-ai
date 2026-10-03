@@ -114,7 +114,41 @@
 
 ---
 
+- **Phase 7 (Advanced Hybrid RAG: Dense + Lexical + RRF + Reranking):** COMPLETED & COMMITTED (`bf307b1`)
+- **Phase 8 (Conversational RAG, Query Transformation, Multi-Query & Semantic Cache):** COMPLETED & VERIFIED
+- **Current Repository State:** Complete conversational RAG pipeline functioning 100% locally with Ollama (`nomic-embed-text:latest` and `phi4-mini:latest`); bounded chronological conversation memory; LLM-powered pronoun & follow-up resolution; pre-flight `/rewrite` preview API and modal; multi-query expansion and query decomposition; parallel hybrid retrieval (`asyncio.gather`); Redis semantic caching ($\ge 0.95$ cosine similarity) with sub-70ms warm responses; distributed request deduplication locks; 100% passing automated test suite (64/64 tests); controlled evaluation on `DECAP470_CLOUD_COMPUTING.pdf` across 6 scenarios documented in `docs/PHASE_8_CONVERSATIONAL_MULTIQUERY_REPORT.md`.
+
+---
+
+## 5. Phase 8 Implementation Highlights: Conversational RAG & Multi-Query
+- **Conversation Context Manager (`app/rag/conversation/context_manager.py`):** Bounded history extraction (limit=6, default 3 turns), strictly ordered chronologically (`created_at ASC`) and isolated by `workspace_id`. Isolates conversational history from factual evidence to eliminate hallucinations.
+- **Query Transformation Service (`app/rag/rewriting/`):**
+  - Contextual query rewriting using `phi4-mini:latest` resolving pronouns and implicit references into standalone search queries.
+  - Multi-query expansion generating 3-4 varied retrieval angles.
+  - Query decomposition breaking complex comparative questions into atomic sub-queries.
+- **Pre-flight Rewrite Preview (`POST /api/v1/projects/{project_id}/chat/rewrite`):** Student inspection modal in `ChatTab.tsx` providing user choice: `"Use Rewritten Query"` vs `"Keep Original Query"`.
+- **Multi-Query Retriever (`app/rag/retrieval/multi_query_retriever.py`):** Concurrent retrieval execution across queries via `asyncio.gather`, deduplication by `chunk_id`, evidence fusion, and cross-encoder reranking against the primary query.
+- **Redis Semantic Cache & Deduplication (`app/rag/cache/redis_cache.py`):** Project-isolated vector cosine similarity matching ($\ge 0.95$), sub-70ms cache hit response, distributed request deduplication mutex locks with 15s TTL, and non-blocking graceful degradation.
+- **Controlled Evaluation:** Executed on `DECAP470_CLOUD_COMPUTING.pdf` across 6 test scenarios; documented in `docs/PHASE_8_CONVERSATIONAL_MULTIQUERY_REPORT.md` and `phase8_evaluation_results.json`.
+
+---
+
+## 6. Docker Infrastructure Status
+- `studyspace-postgres`: Up & healthy (Port 5432)
+- `studyspace-redis`: Up & healthy (Port 6379)
+- `studyspace-api`: Up & healthy (Port 8000)
+- `studyspace-web`: Up (Port 3000)
+- `Ollama`: Local host service (Port 11434, models `nomic-embed-text:latest` & `phi4-mini:latest`)
+
+---
+
+## 7. Reserved Test Documents Status
+- `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact (13,573,276 bytes); 1,728 chunks embedded and verified across Baseline, Advanced Hybrid, and Conversational RAG.
+- `D:\RAG_DATA_TESTING\Network Security Book.pdf`: STRICTLY UNTOUCHED, reserved exclusively for future evaluation.
+
+---
+
 ## 8. Next Phase Boundary
-- **Phase 8:** Query Transformation, Multi-Query Retrieval, Sub-Query Decomposition, and Semantic Caching.
-- **Phase 7 Boundary Check:** Query rewriting is deferred to Phase 8. Multi-query decomposition is deferred to Phase 8. Semantic caching is deferred to Phase 8. Hybrid retrieval, RRF, and local reranking completed.
+- **Phase 9:** Metadata Filtering, Dynamic Retrieval Routing, and Adaptive RAG.
+- **Phase 8 Boundary Check:** Conversational RAG, Query Transformation, Multi-Query Expansion, Query Decomposition, Redis Semantic Caching, and Pre-flight Rewrite Preview are fully implemented, tested, and documented. Do NOT auto-start Phase 9 without user instruction.
 

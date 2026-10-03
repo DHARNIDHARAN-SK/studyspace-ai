@@ -39,6 +39,7 @@ class BaseLLMProvider(ABC):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
     ) -> LLMResponse:
         """Generate text completion for a given prompt."""
         pass

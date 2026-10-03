@@ -186,7 +186,25 @@ export interface ChatQueryPayload {
   conversation_id?: string;
   top_k?: number;
   document_ids?: string[];
-  mode?: "baseline" | "advanced";
+  mode?: "baseline" | "advanced" | "conversational";
+  rewrite_enabled?: boolean;
+  selected_query?: string;
+  rewrite_accepted?: boolean;
+  multi_query_enabled?: boolean;
+  decomposition_enabled?: boolean;
+}
+
+export interface RewritePreviewPayload {
+  query: string;
+  conversation_id?: string;
+}
+
+export interface RewritePreviewResponse {
+  original_query: string;
+  rewritten_query: string;
+  was_rewritten: boolean;
+  latency_ms: number;
+  reason?: string;
 }
 
 export interface ChatQueryResponse {
@@ -207,7 +225,32 @@ export interface ChatQueryResponse {
     dense_candidates?: number;
     lexical_candidates?: number;
     fused_candidates?: number;
+    cache_hit?: boolean;
+    cached_query?: string;
+    cache_latency_ms?: number;
+    rewrite_latency_ms?: number;
+    rewrite_enabled?: boolean;
+    rewrite_accepted?: boolean;
+    rewritten_query?: string;
+    selected_query?: string;
+    multi_query_enabled?: boolean;
+    generated_queries?: string[];
   };
+}
+
+export async function previewQueryRewrite(
+  token: string,
+  projectId: string,
+  payload: RewritePreviewPayload
+): Promise<RewritePreviewResponse> {
+  return fetchWithAuth<RewritePreviewResponse>(
+    `/api/v1/projects/${projectId}/chat/rewrite`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export async function sendChatMessage(

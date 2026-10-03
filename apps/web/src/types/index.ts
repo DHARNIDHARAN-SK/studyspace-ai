@@ -73,6 +73,13 @@ export interface Message {
   content: string;
   original_user_query?: string;
   rewritten_query?: string;
+  selected_query?: string;
+  rewrite_enabled?: boolean;
+  rewrite_accepted?: boolean;
+  multi_query_enabled?: boolean;
+  generated_queries?: string[];
+  cache_hit?: boolean;
+  rag_metadata?: Record<string, any>;
   citations?: Citation[];
   created_at: string;
   latency_ms?: number;

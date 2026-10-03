@@ -9,7 +9,16 @@ from app.core.config import settings
 from app.core.errors import AppError, NotFoundError, ForbiddenError
 from app.db.models import Conversation, Document, DocumentChunk, Message, MessageCitation, Project, Workspace
 from app.db.session import get_session_factory
-from app.rag.pipeline import AdvancedRAGPipeline, AdvancedRAGResult, BaselineRAGPipeline, BaselineRAGResult
+from app.rag.conversation.context_manager import ConversationContextManager, ConversationTurn
+from app.rag.pipeline import (
+    AdvancedRAGPipeline,
+    AdvancedRAGResult,
+    BaselineRAGPipeline,
+    BaselineRAGResult,
+    ConversationalRAGPipeline,
+    ConversationalRAGResult,
+)
+from app.rag.rewriting.service import QueryTransformationService, RewrittenQueryResult
 
 
 def utc_now() -> datetime:
@@ -18,7 +27,8 @@ def utc_now() -> datetime:
 
 class ChatService:
     """
-    Coordinates baseline and advanced hybrid RAG execution with conversation and citation persistence.
+    Coordinates baseline, advanced hybrid, and Phase 8 conversational RAG execution
+    with conversation and citation persistence.
     Enforces tenant boundaries and authorization.
     """
 
@@ -26,11 +36,23 @@ class ChatService:
         self,
         baseline_pipeline: Optional[BaselineRAGPipeline] = None,
         advanced_pipeline: Optional[AdvancedRAGPipeline] = None,
+        conversational_pipeline: Optional[ConversationalRAGPipeline] = None,
+        context_manager: Optional[ConversationContextManager] = None,
+        transformation_service: Optional[QueryTransformationService] = None,
     ):
         self.baseline_pipeline = baseline_pipeline or BaselineRAGPipeline()
         self.advanced_pipeline = advanced_pipeline or AdvancedRAGPipeline()
+        self.conversational_pipeline = conversational_pipeline or ConversationalRAGPipeline()
+        self.context_manager = context_manager or ConversationContextManager()
+        self.transformation_service = transformation_service or QueryTransformationService()
+
         # Backward compatibility alias
-        self.pipeline = self.advanced_pipeline if settings.RAG_RETRIEVAL_MODE == "advanced" else self.baseline_pipeline
+        if settings.RAG_RETRIEVAL_MODE == "baseline":
+            self.pipeline = self.baseline_pipeline
+        elif settings.RAG_RETRIEVAL_MODE == "advanced":
+            self.pipeline = self.advanced_pipeline
+        else:
+            self.pipeline = self.conversational_pipeline
 
     async def get_or_create_conversation(
         self,
@@ -68,6 +90,50 @@ class ChatService:
         await session.flush()
         return conv
 
+    async def preview_rewrite(
+        self,
+        workspace_id: uuid.UUID,
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+        query: str,
+        conversation_id: Optional[uuid.UUID] = None,
+    ) -> Dict[str, Any]:
+        """
+        Pre-flight rewrite preview allowing the student to inspect or edit the reformulated query
+        before submitting retrieval.
+        """
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            proj_stmt = select(Project).where(
+                Project.id == project_id,
+                Project.workspace_id == workspace_id,
+            )
+            proj_res = await session.execute(proj_stmt)
+            if not proj_res.scalar_one_or_none():
+                raise ForbiddenError("You do not have access to this project workspace.")
+
+            history: List[ConversationTurn] = []
+            if conversation_id:
+                history = await self.context_manager.get_recent_history(
+                    session=session,
+                    conversation_id=conversation_id,
+                    workspace_id=workspace_id,
+                    limit=settings.RAG_CONVERSATION_HISTORY_LIMIT,
+                )
+
+            rw_res: RewrittenQueryResult = await self.transformation_service.rewrite_query(
+                query=query.strip(),
+                history=history,
+            )
+
+            return {
+                "original_query": rw_res.original_query,
+                "rewritten_query": rw_res.rewritten_query,
+                "was_rewritten": rw_res.was_rewritten,
+                "latency_ms": rw_res.latency_ms,
+                "reason": rw_res.reason,
+            }
+
     async def handle_chat_query(
         self,
         workspace_id: uuid.UUID,
@@ -78,9 +144,15 @@ class ChatService:
         top_k: int = settings.RAG_DEFAULT_TOP_K,
         document_ids: Optional[List[uuid.UUID]] = None,
         retrieval_mode: Optional[str] = None,
+        rewrite_enabled: Optional[bool] = None,
+        selected_query: Optional[str] = None,
+        rewrite_accepted: Optional[bool] = None,
+        multi_query_enabled: Optional[bool] = None,
+        decomposition_enabled: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
-        Executes baseline or advanced hybrid RAG pipeline and persists messages & citations to PostgreSQL.
+        Executes baseline, advanced hybrid, or conversational RAG pipeline
+        and persists messages & citations to PostgreSQL.
         """
         active_mode = (retrieval_mode or settings.RAG_RETRIEVAL_MODE or "advanced").lower().strip()
 
@@ -106,7 +178,17 @@ class ChatService:
                 title=query[:40] if query else "New Chat",
             )
 
-            # 3. Persist User Message
+            # 3. Retrieve recent history for conversational mode before adding new user message
+            recent_history: List[ConversationTurn] = []
+            if active_mode == "conversational":
+                recent_history = await self.context_manager.get_recent_history(
+                    session=session,
+                    conversation_id=conv.id,
+                    workspace_id=workspace_id,
+                    limit=settings.RAG_CONVERSATION_HISTORY_LIMIT,
+                )
+
+            # 4. Persist User Message
             user_msg = Message(
                 conversation_id=conv.id,
                 workspace_id=workspace_id,
@@ -117,7 +199,7 @@ class ChatService:
             session.add(user_msg)
             await session.flush()
 
-            # 4. Execute Selected RAG Pipeline (Baseline or Advanced Hybrid)
+            # 5. Execute Selected RAG Pipeline
             if active_mode == "baseline":
                 rag_result = await self.baseline_pipeline.execute(
                     query=query.strip(),
@@ -126,7 +208,7 @@ class ChatService:
                     top_k=top_k,
                     document_ids=document_ids,
                 )
-            else:
+            elif active_mode == "advanced":
                 rag_result = await self.advanced_pipeline.execute(
                     query=query.strip(),
                     workspace_id=workspace_id,
@@ -136,8 +218,38 @@ class ChatService:
                     final_top_k=top_k or settings.RAG_RERANK_TOP_N,
                     document_ids=document_ids,
                 )
+            else:
+                # Conversational Mode (Phase 8)
+                rw_flag = rewrite_enabled if rewrite_enabled is not None else settings.RAG_QUERY_REWRITE_ENABLED
+                mq_flag = multi_query_enabled if multi_query_enabled is not None else settings.RAG_MULTI_QUERY_ENABLED
+                dc_flag = decomposition_enabled if decomposition_enabled is not None else settings.RAG_DECOMPOSITION_ENABLED
 
-            # 5. Persist Assistant Message
+                rag_result = await self.conversational_pipeline.execute(
+                    query=query.strip(),
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    history=recent_history,
+                    rewrite_enabled=rw_flag,
+                    selected_query=selected_query,
+                    rewrite_accepted=rewrite_accepted,
+                    multi_query_enabled=mq_flag,
+                    decomposition_enabled=dc_flag,
+                    dense_top_k=settings.RAG_DENSE_TOP_K,
+                    lexical_top_k=settings.RAG_LEXICAL_TOP_K,
+                    final_top_k=top_k or settings.RAG_RERANK_TOP_N,
+                    document_ids=document_ids,
+                )
+
+                # Update User Message with Phase 8 metadata
+                user_msg.selected_query = rag_result.selected_query
+                user_msg.rewrite_enabled = rag_result.rewrite_enabled
+                user_msg.rewrite_accepted = rag_result.rewrite_accepted
+                user_msg.multi_query_enabled = rag_result.multi_query_enabled
+                user_msg.generated_queries = rag_result.generated_queries
+                user_msg.cache_hit = rag_result.cache_hit
+                user_msg.rag_metadata = rag_result.rag_metadata
+
+            # 6. Persist Assistant Message
             assistant_msg = Message(
                 conversation_id=conv.id,
                 workspace_id=workspace_id,
@@ -147,15 +259,16 @@ class ChatService:
                 model_id=rag_result.llm_model,
                 token_usage=rag_result.token_usage,
                 latency_ms=rag_result.total_latency_ms,
+                cache_hit=getattr(rag_result, "cache_hit", False),
+                rag_metadata=getattr(rag_result, "rag_metadata", {}),
             )
             session.add(assistant_msg)
             await session.flush()
 
-            # 6. Persist Citations with Provenance
+            # 7. Persist Citations with Provenance
             persisted_citations = []
             for order, cit in enumerate(rag_result.citations, start=1):
                 valid_chunk_id = None
-                matched_chunk = None
                 if cit.chunk_id:
                     matched_chunk = await session.get(DocumentChunk, cit.chunk_id)
                     if matched_chunk:
@@ -217,6 +330,16 @@ class ChatService:
                 "dense_candidates": getattr(rag_result, "dense_candidates_count", 0),
                 "lexical_candidates": getattr(rag_result, "lexical_candidates_count", 0),
                 "fused_candidates": getattr(rag_result, "fused_candidates_count", 0),
+                "cache_hit": getattr(rag_result, "cache_hit", False),
+                "cached_query": getattr(rag_result, "cached_query", None),
+                "cache_latency_ms": getattr(rag_result, "cache_latency_ms", 0),
+                "rewrite_latency_ms": getattr(rag_result, "rewrite_latency_ms", 0),
+                "rewrite_enabled": getattr(rag_result, "rewrite_enabled", False),
+                "rewrite_accepted": getattr(rag_result, "rewrite_accepted", False),
+                "rewritten_query": getattr(rag_result, "rewritten_query", None),
+                "selected_query": getattr(rag_result, "selected_query", query.strip()),
+                "multi_query_enabled": getattr(rag_result, "multi_query_enabled", False),
+                "generated_queries": getattr(rag_result, "generated_queries", []),
             }
 
             return {
@@ -230,6 +353,9 @@ class ChatService:
                     "created_at": assistant_msg.created_at.isoformat(),
                     "latency_ms": assistant_msg.latency_ms,
                     "model": assistant_msg.model_id,
+                    "cache_hit": getattr(rag_result, "cache_hit", False),
+                    "selected_query": getattr(rag_result, "selected_query", None),
+                    "rag_metadata": getattr(rag_result, "rag_metadata", {}),
                 },
                 "metrics": metrics,
             }
@@ -317,5 +443,12 @@ class ChatService:
                     "created_at": m.created_at.isoformat(),
                     "latency_ms": m.latency_ms,
                     "model": m.model_id,
+                    "selected_query": m.selected_query,
+                    "rewrite_enabled": m.rewrite_enabled,
+                    "rewrite_accepted": m.rewrite_accepted,
+                    "multi_query_enabled": m.multi_query_enabled,
+                    "generated_queries": m.generated_queries,
+                    "cache_hit": m.cache_hit,
+                    "rag_metadata": m.rag_metadata,
                 })
             return results

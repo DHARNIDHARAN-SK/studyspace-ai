@@ -59,13 +59,24 @@ class Settings(BaseSettings):
     RERANKER_MODEL_ID: str | None = None
 
     # Baseline & Advanced RAG Settings
-    RAG_RETRIEVAL_MODE: str = "advanced"  # baseline | advanced
+    RAG_RETRIEVAL_MODE: str = "advanced"  # baseline | advanced | conversational
     RAG_DEFAULT_TOP_K: int = 5
     RAG_DENSE_TOP_K: int = 20
     RAG_LEXICAL_TOP_K: int = 20
     RAG_RRF_K: int = 60
     RAG_RERANK_TOP_N: int = 5
     RAG_MAX_CONTEXT_CHARS: int = 8000
+
+    # Phase 8: Conversational RAG, Query Transformation & Semantic Cache
+    RAG_CONVERSATION_HISTORY_LIMIT: int = 6
+    RAG_QUERY_REWRITE_ENABLED: bool = False
+    RAG_MULTI_QUERY_ENABLED: bool = False
+    RAG_MULTI_QUERY_COUNT: int = 3
+    RAG_DECOMPOSITION_ENABLED: bool = False
+    RAG_SEMANTIC_CACHE_ENABLED: bool = True
+    RAG_SEMANTIC_CACHE_SIMILARITY_THRESHOLD: float = 0.95
+    RAG_SEMANTIC_CACHE_TTL_SECONDS: int = 3600
+    RAG_REQUEST_DEDUPLICATION_TTL_SECONDS: int = 15
 
     # Background Tasks & Cache
     REDIS_URL: str | None = None

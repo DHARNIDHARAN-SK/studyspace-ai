@@ -93,23 +93,22 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 
 ---
 
-## Phase 6: Student Learning Tools
-- [ ] Project-contained Revision Checklist (`not_started`, `learning`, `revised`) with links to sources and conversations.
-- [ ] Source-grounded Quiz Generator (MCQ, short-answer, challenge questions).
-- [ ] Protected answer keys (answers and explanations hidden until attempt submission).
-- [ ] Quiz attempt tracking and review interface.
-- [ ] Source-grounded Study Guide generation and persistence.
+## Phase 8: Conversational RAG, Query Transformation, Multi-Query & Semantic Cache
+- [x] Bounded conversation context manager (`ConversationContextManager`) extracting recent turns chronologically with strict workspace isolation.
+- [x] Contextual query rewriting (`QueryTransformationService`) resolving ambiguous pronouns and implicit references into standalone queries using `phi4-mini:latest`.
+- [x] Pre-flight query rewrite preview endpoint (`POST /api/v1/projects/{project_id}/chat/rewrite`) and frontend review modal.
+- [x] Student control toggle allowing explicit choice between rewritten query and original raw query.
+- [x] Multi-query parallel retrieval expanding queries into diverse search angles (`MultiQueryRetriever`).
+- [x] Sub-query decomposition splitting compound comparative queries into atomic sub-questions.
+- [x] Candidate chunk deduplication by `chunk_id` and cross-encoder reranking against the primary query.
+- [x] Redis-backed semantic caching (`RedisSemanticCache`) with vector cosine similarity ($\ge 0.95$) returning answers in sub-70ms on cache hits.
+- [x] Request deduplication distributed mutex locks with 15s TTL.
+- [x] Database migration `20261003000003_phase8_conversational_rag.sql` adding Phase 8 columns and indexes to `messages`.
+- [x] Controlled evaluation experiment on 327-page textbook `DECAP470_CLOUD_COMPUTING.pdf` across 6 conversational scenarios documented in `docs/PHASE_8_CONVERSATIONAL_MULTIQUERY_REPORT.md`.
 
 ---
 
-## Phase 7: Export Engine & Query Rewriting UX
-- [ ] Single response and full conversation export to PDF and DOCX.
-- [ ] Configurable transcript limits (10, 15, 20 pages max) with explicit overflow handling.
-- [ ] Query rewriting UX with user toggle (option to use proposed query or retain original).
-
----
-
-## Phase 8: Platform Developer REST API
+## Phase 9: Metadata Filtering, Dynamic Retrieval Routing, and Adaptive RAG
 - [ ] Scoped API key generation with cryptographic hashing at rest.
 - [ ] External API routes (`/v1/chat/completions` or `/v1/query`).
 - [ ] Per-key and per-workspace rate limiting and usage tracking.

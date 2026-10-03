@@ -17,7 +17,7 @@ class OllamaLLMProvider(BaseLLMProvider):
         self,
         base_url: Optional[str] = None,
         model_id: Optional[str] = None,
-        timeout: float = 180.0,
+        timeout: float = 300.0,
     ):
         model = model_id or settings.OLLAMA_CHAT_MODEL
         super().__init__(provider_name="ollama", model_id=model)
@@ -29,6 +29,7 @@ class OllamaLLMProvider(BaseLLMProvider):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
     ) -> LLMResponse:
         """
         Executes text generation using phi4-mini via Ollama /api/generate.
@@ -40,6 +41,7 @@ class OllamaLLMProvider(BaseLLMProvider):
             "stream": False,
             "options": {
                 "temperature": temperature,
+                "num_predict": max_tokens or 600,
             },
         }
         if system_prompt:

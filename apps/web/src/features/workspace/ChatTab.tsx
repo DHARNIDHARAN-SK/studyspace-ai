@@ -6,10 +6,13 @@ import {
   Copy,
   ExternalLink,
   FileCheck2,
+  HelpCircle,
+  Layers,
   RefreshCw,
   Send,
   Sparkles,
   User,
+  Zap,
 } from "lucide-react";
 import { ConversationSidebar } from "./ConversationSidebar";
 import { Button } from "../../components/ui/Button";
@@ -19,7 +22,9 @@ import { useAuth } from "../auth/AuthContext";
 import {
   getConversationMessages,
   listConversations,
+  previewQueryRewrite,
   sendChatMessage,
+  type RewritePreviewResponse,
 } from "../../lib/api-client";
 import type { Citation, Conversation, Message, Project } from "../../types";
 
@@ -43,7 +48,15 @@ export function ChatTab({ project }: ChatTabProps) {
   const [chatError, setChatError] = useState<string | null>(null);
   const [inspectingCitation, setInspectingCitation] = useState<Citation | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [retrievalMode, setRetrievalMode] = useState<"advanced" | "baseline">("advanced");
+
+  // Phase 8 RAG Controls
+  const [retrievalMode, setRetrievalMode] = useState<"conversational" | "advanced" | "baseline">("conversational");
+  const [rewriteEnabled, setRewriteEnabled] = useState<boolean>(true);
+  const [multiQueryEnabled, setMultiQueryEnabled] = useState<boolean>(true);
+
+  // Pre-flight rewrite preview state
+  const [isPreviewingRewrite, setIsPreviewingRewrite] = useState(false);
+  const [rewritePreview, setRewritePreview] = useState<RewritePreviewResponse | null>(null);
 
   // Fetch project conversations on mount
   const fetchConversations = useCallback(async () => {
@@ -93,11 +106,13 @@ export function ChatTab({ project }: ChatTabProps) {
     };
   }, [token, project.id, activeConvId]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputQuery.trim() || isSending || !token) return;
+  const executeSend = async (
+    queryText: string,
+    overrideSelectedQuery?: string,
+    rewriteAccepted?: boolean
+  ) => {
+    if (!queryText.trim() || isSending || !token) return;
 
-    const userText = inputQuery.trim();
     setInputQuery("");
     setChatError(null);
 
@@ -105,7 +120,8 @@ export function ChatTab({ project }: ChatTabProps) {
       id: `temp-${Date.now()}`,
       conversation_id: activeConvId || "pending",
       role: "user",
-      content: userText,
+      content: queryText.trim(),
+      selected_query: overrideSelectedQuery,
       created_at: new Date().toISOString(),
     };
 
@@ -115,26 +131,52 @@ export function ChatTab({ project }: ChatTabProps) {
     try {
       const validConvId = UUID_REGEX.test(activeConvId) ? activeConvId : undefined;
       const resp = await sendChatMessage(token, project.id, {
-        query: userText,
+        query: queryText.trim(),
         conversation_id: validConvId,
         top_k: 5,
         mode: retrievalMode,
+        rewrite_enabled: rewriteEnabled,
+        selected_query: overrideSelectedQuery,
+        rewrite_accepted: rewriteAccepted,
+        multi_query_enabled: multiQueryEnabled,
       });
 
-      // Update active conversation ID if newly created
       if (!validConvId && resp.conversation_id) {
         setActiveConvId(resp.conversation_id);
         fetchConversations();
       }
 
-      // Append assistant message
       setMessages((prev) => [...prev, resp.message]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to execute baseline RAG query.";
+      const msg = err instanceof Error ? err.message : "Failed to execute RAG query.";
       setChatError(msg);
-      // Remove temporary pending user message or keep it with error note
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputQuery.trim() || isSending || !token) return;
+    await executeSend(inputQuery.trim());
+  };
+
+  const handlePreviewRewrite = async () => {
+    if (!inputQuery.trim() || !token || isPreviewingRewrite) return;
+    setIsPreviewingRewrite(true);
+    setChatError(null);
+    try {
+      const validConvId = UUID_REGEX.test(activeConvId) ? activeConvId : undefined;
+      const preview = await previewQueryRewrite(token, project.id, {
+        query: inputQuery.trim(),
+        conversation_id: validConvId,
+      });
+      setRewritePreview(preview);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to preview rewrite.";
+      setChatError(msg);
+    } finally {
+      setIsPreviewingRewrite(false);
     }
   };
 
@@ -142,6 +184,7 @@ export function ChatTab({ project }: ChatTabProps) {
     setActiveConvId("");
     setMessages([]);
     setChatError(null);
+    setRewritePreview(null);
   };
 
   const handleRename = (id: string, newTitle: string) => {
@@ -177,7 +220,7 @@ export function ChatTab({ project }: ChatTabProps) {
   const starterPrompts = [
     "Summarize the key cloud service models and their differences",
     "Explain virtualization and hypervisors in cloud computing",
-    "What are the main security risks and mitigation strategies in cloud storage?",
+    "What are its main security risks and mitigation strategies?",
   ];
 
   return (
@@ -199,29 +242,63 @@ export function ChatTab({ project }: ChatTabProps) {
         <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between text-xs gap-2">
           <div className="flex items-center space-x-2 text-slate-500">
             <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Scope: <strong className="text-slate-700">Project Course Materials</strong></span>
+            <span>Scope: <strong className="text-slate-700">Course Materials</strong></span>
             <span className="text-slate-300">|</span>
             <span className="text-slate-400">
-              Index: {retrievalMode === "advanced" ? "pgvector HNSW + FTS (RRF + Rerank)" : "pgvector HNSW (768d)"}
+              Index: {retrievalMode === "conversational"
+                ? "Conversational RAG (Multi-Query + Redis Cache)"
+                : retrievalMode === "advanced"
+                ? "Hybrid Dense + Lexical (RRF + Cross-Encoder)"
+                : "pgvector HNSW (768d)"}
             </span>
           </div>
 
           <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={() => setRetrievalMode((prev) => (prev === "advanced" ? "baseline" : "advanced"))}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors flex items-center space-x-1 ${
-                retrievalMode === "advanced"
-                  ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
-                  : "bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200"
-              }`}
-              title="Click to toggle between Advanced Hybrid RAG and Baseline Vector RAG"
+            {/* Mode Switcher */}
+            <select
+              value={retrievalMode}
+              onChange={(e) => setRetrievalMode(e.target.value as any)}
+              className="text-[11px] font-medium bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
-              <Sparkles className="w-3 h-3 text-indigo-500" />
-              <span>{retrievalMode === "advanced" ? "Mode: Advanced Hybrid (RRF)" : "Mode: Baseline Vector"}</span>
-            </button>
+              <option value="conversational">Phase 8: Conversational RAG</option>
+              <option value="advanced">Phase 7: Advanced Hybrid</option>
+              <option value="baseline">Phase 6: Baseline Vector</option>
+            </select>
+
+            {/* Conversational Controls */}
+            {retrievalMode === "conversational" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setRewriteEnabled(!rewriteEnabled)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors flex items-center space-x-1 ${
+                    rewriteEnabled
+                      ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                      : "bg-slate-100 border-slate-200 text-slate-400 line-through"
+                  }`}
+                  title="Enable/disable contextual query rewriting"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Rewrite</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMultiQueryEnabled(!multiQueryEnabled)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors flex items-center space-x-1 ${
+                    multiQueryEnabled
+                      ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                      : "bg-slate-100 border-slate-200 text-slate-400 line-through"
+                  }`}
+                  title="Enable/disable multi-query parallel expansion"
+                >
+                  <Layers className="w-3 h-3" />
+                  <span>Multi-Query</span>
+                </button>
+              </>
+            )}
+
             <Badge variant="indigo" className="font-mono text-[10px]">
-              phi4-mini:latest
+              phi4-mini
             </Badge>
           </div>
         </div>
@@ -256,10 +333,10 @@ export function ChatTab({ project }: ChatTabProps) {
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Baseline RAG Study Session</h3>
+                <h3 className="text-sm font-bold text-slate-900">Conversational RAG Study Session</h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Ask questions about your uploaded course materials. Every response is strictly
-                  grounded using local vector retrieval with real page citations.
+                  Ask follow-up questions, compare topics, and resolve pronouns seamlessly.
+                  Retrieval leverages multi-query hybrid search, Redis semantic caching, and real textbook citations.
                 </p>
               </div>
 
@@ -302,6 +379,14 @@ export function ChatTab({ project }: ChatTabProps) {
                 >
                   <div className="whitespace-pre-wrap">{m.content}</div>
 
+                  {/* User Rewritten Query Info */}
+                  {m.role === "user" && m.selected_query && m.selected_query !== m.content && (
+                    <div className="mt-2 pt-2 border-t border-indigo-500/30 text-[11px] text-indigo-100 flex items-center space-x-1">
+                      <Sparkles className="w-3 h-3 text-indigo-200 shrink-0" />
+                      <span>Searched as: <em>"{m.selected_query}"</em></span>
+                    </div>
+                  )}
+
                   {/* Citations Box (Assistant only) */}
                   {m.citations && m.citations.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-1.5">
@@ -331,6 +416,12 @@ export function ChatTab({ project }: ChatTabProps) {
                   {m.role === "assistant" && (
                     <div className="mt-2.5 pt-2 flex items-center justify-between text-[10px] text-slate-400">
                       <div className="flex items-center space-x-2">
+                        {m.cache_hit && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium space-x-1">
+                            <Zap className="w-3 h-3 text-emerald-600" />
+                            <span>Semantic Cache Hit</span>
+                          </span>
+                        )}
                         <span>{m.latency_ms ? `${m.latency_ms} ms` : "Grounded response"}</span>
                         <span>•</span>
                         <span className="font-mono">{m.model || "phi4-mini:latest"}</span>
@@ -365,7 +456,11 @@ export function ChatTab({ project }: ChatTabProps) {
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-500 flex items-center space-x-2">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                <span>Executing vector retrieval & generating grounded answer with phi4-mini...</span>
+                <span>
+                  {retrievalMode === "conversational"
+                    ? "Resolving context, executing multi-query retrieval & generating answer..."
+                    : "Executing hybrid retrieval & generating grounded answer with phi4-mini..."}
+                </span>
               </div>
             </div>
           )}
@@ -387,6 +482,25 @@ export function ChatTab({ project }: ChatTabProps) {
               placeholder={`Ask a question about ${project.name}... (Press Enter to send)`}
               className="flex-1 text-xs border-0 focus:outline-none resize-none p-1 text-slate-800 placeholder-slate-400"
             />
+            {retrievalMode === "conversational" && rewriteEnabled && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handlePreviewRewrite}
+                disabled={!inputQuery.trim() || isSending || isPreviewingRewrite}
+                title="Preview how this query will be reformulated using conversation history"
+                leftIcon={
+                  isPreviewingRewrite ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  )
+                }
+              >
+                Preview Rewrite
+              </Button>
+            )}
             <Button
               type="submit"
               size="sm"
@@ -398,6 +512,74 @@ export function ChatTab({ project }: ChatTabProps) {
           </div>
         </form>
       </div>
+
+      {/* Query Rewrite Preview Modal */}
+      <Modal
+        isOpen={!!rewritePreview}
+        onClose={() => setRewritePreview(null)}
+        title="Query Formulation Preview"
+        description="Inspect or choose how your question will be formulated for textbook retrieval."
+      >
+        {rewritePreview && (
+          <div className="space-y-4 text-xs">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                Original Query
+              </span>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-mono">
+                {rewritePreview.original_query}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wide flex items-center space-x-1">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Proposed Standalone Query</span>
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {rewritePreview.latency_ms} ms
+                </span>
+              </div>
+              <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-950 font-medium">
+                {rewritePreview.rewritten_query}
+              </div>
+              {rewritePreview.reason && (
+                <p className="text-[11px] text-slate-500 italic mt-1">
+                  Reasoning: {rewritePreview.reason}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const original = rewritePreview.original_query;
+                  setRewritePreview(null);
+                  executeSend(original, original, false);
+                }}
+              >
+                Keep Original Query
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  const original = rewritePreview.original_query;
+                  const rewritten = rewritePreview.rewritten_query;
+                  setRewritePreview(null);
+                  executeSend(original, rewritten, true);
+                }}
+              >
+                Use Rewritten Query
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Citation Inspector Modal */}
       <Modal
