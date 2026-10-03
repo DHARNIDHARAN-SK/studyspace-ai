@@ -10,6 +10,20 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- -----------------------------------------------------------------------------
+-- 0. Auth Schema Stubs (Ensures compatibility with local Docker/Postgres & Supabase)
+-- -----------------------------------------------------------------------------
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE TABLE IF NOT EXISTS auth.users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
+);
+
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
+    SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
+$$ LANGUAGE sql STABLE;
+
+-- -----------------------------------------------------------------------------
 -- 1. Profiles (matches Supabase Auth user)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.profiles (

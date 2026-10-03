@@ -78,3 +78,31 @@ This document records the architectural and engineering decisions actually made 
 - **Context:** Students need seamless project switching, navigation between learning tools, and persistent context across views.
 - **Decision:** Use `react-router-dom` with a `ProtectedRoute` wrapper guarding the `AppShell`. Provide a persistent left sidebar on desktop with project selector and a mobile drawer. The client stores no server secrets and communicates only with Supabase Auth (via public anon key) and the backend API (via Bearer token).
 - **Consequences:** Responsive, accessible application shell adhering to education SaaS UX patterns.
+
+---
+
+## ADR-009: HNSW Vector Indexing Strategy with Cosine Distance
+- **Date:** 2026-10-03
+- **Context:** Master Architecture Section 6 & 10 requires 768-dimensional dense vector embeddings (`nomic-embed-text`) with high-recall retrieval. An index strategy is needed for `document_chunks.embedding`.
+- **Decision:** Use pgvector's HNSW (Hierarchical Navigable Small World) index with `vector_cosine_ops` (`idx_chunks_embedding_hnsw`).
+- **Consequences:** Unlike IVFFlat, HNSW does not require pre-populating or training a cluster list before creating the index. It supports incremental chunk additions with low query latency and high recall out-of-the-box.
+
+---
+
+## ADR-010: Asynchronous SQLAlchemy 2.0 with asyncpg and Contextual NullPool
+- **Date:** 2026-10-03
+- **Context:** The FastAPI backend requires non-blocking asynchronous database operations. Under pytest-asyncio on Windows, connection pooling across test-scoped event loops causes socket termination collisions.
+- **Decision:** Standardize on SQLAlchemy 2.0 async engine (`create_async_engine`) and `asyncpg`. In production and normal runtime, use `AsyncAdaptedQueuePool` (pool size 10, max overflow 20, pre-ping enabled). Under automated testing environments, dynamically switch to `NullPool` so connections close within the active event loop.
+- **Consequences:** Maximizes production throughput via pooling while providing rock-solid, race-condition-free test execution.
+
+---
+
+## ADR-011: Canonical Tenant Storage Hierarchy and Defensive File Path Validation
+- **Date:** 2026-10-03
+- **Context:** Student documents and generated study materials must be strictly isolated to prevent cross-tenant exposure or path traversal attacks.
+- **Decision:** Enforce canonical storage hierarchy:
+  `workspaces/{workspace_id}/projects/{project_id}/documents/{document_id}/{filename}`
+  and for exports:
+  `workspaces/{workspace_id}/exports/{export_id}/{filename}`.
+  All upload operations must sanitize filenames, strip traversal elements (`..`, `\`, leading `/`, null bytes), validate UUID segments, and enforce workspace ownership before any storage or database write.
+- **Consequences:** Eliminates storage traversal, cross-workspace leakage, and namespace collisions across private buckets.

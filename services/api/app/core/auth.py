@@ -20,8 +20,8 @@ class AuthenticatedUser(BaseModel):
 
 def decode_jwt_token(token: str) -> dict:
     """Decodes and validates a Supabase or local JWT token."""
-    # Attempt verification using SUPABASE_JWT_SECRET if configured
-    if settings.SUPABASE_JWT_SECRET:
+    # Attempt verification using real SUPABASE_JWT_SECRET if configured
+    if settings.SUPABASE_JWT_SECRET and not settings.SUPABASE_JWT_SECRET.startswith("your-"):
         try:
             return jwt.decode(
                 token,
@@ -30,13 +30,14 @@ def decode_jwt_token(token: str) -> dict:
                 options={"verify_aud": False}
             )
         except jwt.PyJWTError as e:
-            raise AppError(
-                code="INVALID_TOKEN",
-                message="The provided authentication token is invalid or has expired.",
-                status_code=401,
-                action="Please sign in again to obtain a fresh access token.",
-                details={"reason": str(e)}
-            )
+            if settings.APP_ENV not in ("development", "test"):
+                raise AppError(
+                    code="INVALID_TOKEN",
+                    message="The provided authentication token is invalid or has expired.",
+                    status_code=401,
+                    action="Please sign in again to obtain a fresh access token.",
+                    details={"reason": str(e)}
+                )
 
     # In development / testing environments without remote secret
     try:

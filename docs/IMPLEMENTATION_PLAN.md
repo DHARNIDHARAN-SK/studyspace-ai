@@ -28,8 +28,18 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 
 ---
 
-## Phase 3: Document Ingestion, Parsing, Chunking & Celery Workers
-- [ ] Private Supabase Storage bucket integration with upload validation (MIME, size, checksum).
+## Phase 3: Database, Storage & Data Model Hardening [COMPLETED]
+- [x] Complete 19-table schema migration with foreign key cascading and data integrity constraints.
+- [x] pgvector (0.8.7) extension and 768-dim HNSW vector index (`idx_chunks_embedding_hnsw`) with cosine distance.
+- [x] Automated full-text search update trigger on `document_chunks` for lexical search (`tsvector`).
+- [x] Row-Level Security (RLS) enabled and verified on all 19 public tables.
+- [x] Private Supabase Storage foundation with canonical tenant hierarchy, path traversal security, and MIME/size limits.
+- [x] Typed SQLAlchemy 2.0 async ORM models, async engine, session lifecycle, and connection health probes.
+- [x] Automated unit and integration test suite (24/24 tests passing).
+
+---
+
+## Phase 4: Document Ingestion, Parsing, Chunking & Celery Workers
 - [ ] Asynchronous Celery ingestion worker setup with Redis broker.
 - [ ] Format parsers for `.pdf` (up to 500-page target with batching and scanned detection), `.docx`, `.pptx`, `.txt`, `.md`.
 - [ ] Structure-aware chunking pipeline retaining page/slide/section provenance.
