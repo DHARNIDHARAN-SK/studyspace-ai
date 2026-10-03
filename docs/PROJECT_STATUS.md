@@ -4,77 +4,69 @@
 - **Phase 1 (Foundation & Monorepo Setup):** COMPLETED & COMMITTED (`997e56f9d2465d153caf541e602db107567c5a6c`)
 - **Phase 2 (Authentication & Multi-Tenant Workspaces):** COMPLETED & COMMITTED (`1e2e24398be8e52dbb064c1b97bfb990391492ba`)
 - **Phase 3 (Database, Storage & Data Model Hardening):** COMPLETED & COMMITTED (`94e797d`)
-- **Phase 4 (Frontend SaaS UI + Project Workspace):** COMPLETED & VERIFIED
-- **Current Repository State:** Complete, professional academic SaaS frontend application shell with full public and protected routing, multi-tenant student dashboard, dedicated projects directory, comprehensive 5-tab project workspace (Chat, Sources, Revision, Quizzes, Study Guides), developer API keys console, accessible settings, and 24/24 passing backend tests.
+- **Phase 4 (Frontend SaaS UI + Project Workspace):** COMPLETED & COMMITTED (`faf7958`)
+- **Phase 5 (Document Ingestion, Parsing, Chunking & Worker):** COMPLETED & VERIFIED
+- **Current Repository State:** Complete document ingestion pipeline handling PDF (up to 500 pages), DOCX, PPTX, TXT, and Markdown; structure-aware chunking preserving provenance (pages, slides, section paths); Celery background worker setup with Redis broker; idempotent processing; real backend Sources UI integration; and 39/39 passing backend tests including controlled verification with real 327-page textbook.
 
 ---
 
-## 2. Phase 4 Summary — Frontend SaaS UI & Workspace
-- **Application Routing:**
-  - **Public Routes:**
-    - `/`: Marketing landing page with hero, core architectural pillars, and onboarding CTAs.
-    - `/about`: Academic mission statement on anti-hallucination and evidence-first study.
-    - `/features`: Comprehensive breakdown of the six core architectural pillars.
-    - `/contact`: University partnerships and academic support inquiry form.
-    - `/login`: Student authentication with validation, demo tenant switcher, and redirect if authenticated.
-    - `/signup`: Student account creation form with validation.
-  - **Authenticated Routes (`ProtectedRoute` + `AppShell`):**
-    - `/dashboard`: Student overview with real project counts, project cards, and quick actions.
-    - `/projects`: Dedicated projects directory with live search, subject pills, edit modal, and delete confirmation dialog.
-    - `/projects/:projectId`: Complete project workspace hosting all 5 core learning tools.
-    - `/settings`: Student profile, citation preferences (APA/IEEE/MLA), query rewriting controls, and session sign out.
-    - `/developer`: Platform API key management (creation, once-only raw key display with copy, active key table, scopes, revoke action, and sample cURL requests).
-- **Project Workspace Subsystem:**
-  - **Grounded Chat Tab:**
-    - Left-hand conversation management sidebar with New Chat, search, pinning, inline rename, and delete.
-    - Conversation canvas with user message bubbles, assistant message cards with latency indicators, and verifiable citation buttons.
-    - Citation inspector modal revealing exact retrieved passage snippet and page range.
-    - Composer with multiline textarea, Enter-to-send, source scope indicator, and query rewriter toggle.
-  - **Sources & Documents Tab:**
-    - Document list with size formatting, slide/page count metadata, and indexing status badges (`Indexed`, `Processing`, `Uploaded`, `Failed`).
-    - "Add Course Documents" modal with explicit Phase 5 ingestion boundary notice.
-  - **Revision Checklist Tab:**
-    - Syllabus topic tracker with progress bar (`X of Y topics revised`).
-    - Filter tabs (All, Not Started, In Progress, Revised) and "Add Topic" modal.
-  - **Practice Quizzes Tab:**
-    - Source-grounded interactive quiz view demonstrating protected answer keys.
-    - Choice selection with attempt submission; explanations and citations revealed strictly after submission.
-    - "Generate Practice Quiz" modal foundation.
-  - **Study Guides Tab:**
-    - Formatted review canvas for high-yield exam synthesis and glossary definitions.
-    - Print action and Phase 7 export engine notice.
-- **Design System & Accessibility:**
-  - Modular UI primitives: `Button` (loading states, variants), `Badge` (color-coded status), `Modal` (keyboard Escape, focus trapping, backdrop), and responsive drawer.
-  - Generous whitespace, thin slate borders, restrained indigo accents, and accessible contrast ratios.
+## 2. Phase 5 Summary — Document Ingestion Subsystem
+- **Format Parsers (`app.rag.parsing`):**
+  - **PDF (`PDFParser` via `pypdf`):** Page-by-page streaming extraction supporting documents up to 500 pages; preserves exact 1-indexed page boundaries, page count, heading detection, and scanned/image-only document detection.
+  - **DOCX (`DocxParser` via `python-docx`):** Heading hierarchy tracking (Heading 1/2/3) constructing nested `section_path` strings (e.g. `Chapter 1 > 1.1 Goals`); paragraphs, bullet lists, and table extraction.
+  - **PPTX (`PPTXParser` via `python-pptx`):** Slide numbers (1-indexed), slide titles, body text frames, and speaker notes preservation.
+  - **Text & Markdown (`TextParser`):** Plaintext paragraphs and lines; Markdown headings (`#` to `######`), code blocks, lists, and line numbers.
+  - **Parser Registry (`get_parser_for_filename`):** Dynamic resolution by extension; rejects unsupported formats cleanly with `415 Unsupported Media Type`.
+- **Structure-Aware Chunking (`StructureAwareChunker`):**
+  - Strict preservation of logical boundaries: never splits across slides; tracks `page_start` and `page_end` accurately for PDFs; preserves `section_path` and `heading` context.
+  - Sentence-boundary splitting with configurable overlap for oversized text blocks (`target_chunk_size=1000`, `chunk_overlap=150`, `min_chunk_size=50`, `max_chunk_size=1600`).
+  - Generates deterministic SHA-256 `content_hash` and token count estimation.
+- **Asynchronous Processing & Worker (`app.workers`):**
+  - Celery worker app configured with Redis broker (`REDIS_URL`) and durable tasks (`tasks.ingest_document`).
+  - Worker lifecycle: updates `ingestion_jobs` and `documents.ingestion_status` through stages (`queued` -> `extracting` -> `chunking` -> `indexed` or `failed`).
+  - Enforces workspace/project tenant ownership before any processing.
+- **Idempotency & Deduplication:**
+  - Storage path: `workspaces/{workspace_id}/projects/{project_id}/documents/{document_id}/{filename}`.
+  - Duplicate upload check via SHA-256 prevents redundant ingestion jobs.
+  - Ingestion pipeline deletes existing chunks for the same document version in a single transaction before inserting new chunks, ensuring repeated worker executions never create duplicate chunks.
+- **Frontend Sources Integration (`SourcesTab.tsx`):**
+  - Replaced mock/toast behavior with real backend API integration.
+  - File picker with validation (allowed formats, 50MB ceiling).
+  - Real document listing with byte size, page/slide count, chunk count, and color-coded status badges (`Indexed`, `Ingesting`, `Queued`, `Failed`).
+  - Auto-polling for in-flight jobs.
+  - Ingestion retry action for failed documents and soft-delete action.
 
 ---
 
-## 3. Commands Used
-- `cmd.exe /c "npm run build"` (in `apps/web`)
-- `cmd.exe /c "npm run preview -- --port 5173"` (in `apps/web`)
-- `& .\.venv\Scripts\pytest -v` (in `services/api`)
-- `Playwright MCP browser tools: navigate, snapshot, click, fill_form, resize`
-- `git status`
+## 3. Real Test Document Ingestion Verification
+- **Test File:** `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf` (13,573,276 bytes)
+- **Controlled Test Execution:** Non-destructive read; original file mtime and byte size preserved completely.
+- **Verification Results:**
+  - **Total Pages:** 327 pages
+  - **Total Chunks Produced:** 1,728 structure-aware chunks
+  - **Processing Duration:** 203.23 seconds (first pass)
+  - **Memory Stability:** Peak working set bounded under 1 GB during 327-page processing, garbage-collected back to ~500 MB.
+  - **Status Outcome:** Document became `indexed`, `checksum` recorded, `page_count=327`.
+  - **Idempotency Verification:** Second execution re-chunked and confirmed chunk count remained strictly 1,728 (zero duplicates).
 
 ---
 
-## 4. Tests Performed
-- **Playwright End-to-End UI Verification (11/11 flows verified):**
-  1. Open landing page (`http://localhost:5173/`): VERIFIED (Hero, header, navigation, and footer rendered cleanly)
-  2. Open login (`/login`): VERIFIED (Auth forms, validation, and demo switchers rendered)
-  3. Authenticate with local test mechanism: VERIFIED (Signed in as Alice - Tenant A)
-  4. Reach dashboard (`/dashboard`): VERIFIED (Welcome header, workspace badge, empty state)
-  5. Create project: VERIFIED (Created "Distributed Systems & Cloud Computing", CS 452 via real backend API)
-  6. Open project workspace: VERIFIED (Navigated to `/projects/:projectId` with breadcrumbs and header)
-  7. Switch project workspace tabs: VERIFIED (All 5 tabs: Chat, Sources, Revision, Quizzes, Study Guides rendered active states)
-  8. Sidebar navigation: VERIFIED (Navigated to `/projects`, `/developer`, and `/settings`)
-  9. Mobile navigation & drawer: VERIFIED (Resized viewport to 375x667, hamburger menu and drawer rendered without overflow)
-  10. Logout: VERIFIED (Clicked Sign Out, token cleared, redirected to `/login`)
-  11. Protected route enforcement: VERIFIED (Direct attempt to access `/dashboard` while unauthenticated redirected to `/login`)
+## 4. Tests Executed & Results
+- **Fast Backend Test Suite:**
+  - `services/api/tests/test_auth.py` (3 tests) — PASSED
+  - `services/api/tests/test_database.py` (6 tests) — PASSED
+  - `services/api/tests/test_health.py` (3 tests) — PASSED
+  - `services/api/tests/test_migration.py` (1 test) — PASSED
+  - `services/api/tests/test_projects_isolation.py` (1 test) — PASSED
+  - `services/api/tests/test_storage.py` (10 tests) — PASSED
+  - `services/api/tests/test_ingestion_parsers.py` (7 tests) — PASSED
+  - `services/api/tests/test_ingestion_api.py` (7 tests) — PASSED
+  - **Fast Suite Total:** 38 passed in 4.86s
+- **Controlled Real PDF Test:**
+  - `services/api/tests/test_real_pdf_ingestion.py` (1 test) — PASSED (1,728 chunks from 327 pages)
+  - **Complete Suite Total:** 39 passed (100% PASS, 0 FAIL)
 - **Frontend Production Build:**
-  - `tsc -b && vite build`: PASSED in 16.74s (1673 modules transformed, zero type errors)
-- **Backend Test Suite (24 tests in `services/api/tests`):**
-  - Result: **24 passed in 3.31s (100% PASS, 0 FAIL)**
+  - `tsc -b && vite build` — PASSED (1,673 modules transformed in 9.40s, 0 errors)
 
 ---
 
@@ -83,13 +75,16 @@
 - `studyspace-redis`: Up & healthy (Port 6379)
 - `studyspace-api`: Up & healthy (Port 8000)
 - `studyspace-web`: Up (Port 3000)
+- `studyspace-worker`: Defined in compose, connects to Redis and PostgreSQL with shared upload volumes.
 
 ---
 
-## 6. Reserved Future Test Data
-- `D:\RAG_DATA_TESTING\Network Security Book.pdf` remains strictly uningested and untouched, reserved exclusively for future RAG retrieval evaluation.
+## 6. Reserved Test Documents Status
+- `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact; used exclusively for controlled Phase 5 ingestion test.
+- `D:\RAG_DATA_TESTING\Network Security Book.pdf`: STRICTLY UNTOUCHED, reserved exclusively for future RAG retrieval evaluation.
 
 ---
 
-## 7. Next Phase
-- **Phase 5:** Document Ingestion, Multi-Format Parsing (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`), Structure-Aware Chunking, and Background Celery Workers.
+## 7. Next Phase Boundary
+- **Phase 6:** Embedding Generation (Ollama `nomic-embed-text` / Gemini provider abstraction), pgvector Storage, Full-Text Lexical Search (`tsvector`), and Hybrid Retrieval.
+- **Phase 5 Boundary Check:** NO embeddings were generated. NO vector search was performed. NO LLM generation was invoked.

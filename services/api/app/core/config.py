@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import List, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,6 +64,9 @@ class Settings(BaseSettings):
     # Limits
     MAX_UPLOAD_BYTES: int = 52428800  # 50 MB
     MAX_DOCUMENT_PAGES: int = 500
+
+    # Local Storage Directory
+    UPLOAD_DIR: Path = Path("uploads")
 
 
 settings = Settings()

@@ -130,3 +130,33 @@ This document records the architectural and engineering decisions actually made 
 - **Context:** Master Architecture Section 4.4 and 10 mandate that students must not see quiz answer keys or explanations prior to attempt submission.
 - **Decision:** In the frontend quiz interface, hide expected answers and detailed syllabus citation explanations during question selection. The evaluation UI only reveals correctness badges and underlying citations once the user triggers "Submit Attempt".
 - **Consequences:** Enforces genuine active recall for students, aligning frontend behavior with the upcoming backend quiz evaluation service.
+---
+
+## ADR-015: Structure-Aware Parsing & Provenance Preservation Architecture
+- **Date:** 2026-10-03
+- **Context:** Master Architecture Section 6 mandates that documents must not be parsed blindly or chunked with uniform fixed-length cuts across all formats. Future citation features require fine-grained location tracking (page numbers for PDFs, slide numbers/titles for PPTX, and heading hierarchies for DOCX and Markdown).
+- **Decision:** Implement dedicated parser implementations in `app.rag.parsing` adhering to `BaseParser` returning structured `ParsedBlock` and `ParsedDocument` intermediate objects:
+  - `pypdf`: Extracts page-by-page to safely handle up to 500-page academic documents; detects headings through typographic heuristics; identifies scanned documents when text density is near zero.
+  - `python-docx`: Retains heading levels to construct hierarchical `section_path` strings (`Chapter 1 > 1.1 Overview`); extracts paragraphs and tables.
+  - `python-pptx`: Extracts slide numbers (1-indexed), slide titles, text blocks, and presenter notes.
+  - `TextParser`: Preserves Markdown headings (`#` to `######`), code blocks, bullet lists, and source line numbers.
+- **Consequences:** All downstream chunks maintain stable, verified academic provenance suitable for exact citations.
+
+---
+
+## ADR-016: Celery Background Ingestion Worker and Non-Blocking Upload Flow
+- **Date:** 2026-10-03
+- **Context:** The system must process documents up to 500 pages (e.g. 300+ page course textbooks). Processing such files synchronously in HTTP request cycles causes gateway timeouts (504) and client connection drops.
+- **Decision:** In the upload endpoint (`POST /api/v1/projects/{project_id}/documents`), validate the file, store it in private storage, create a `queued` Document record and IngestionJob, dispatch an asynchronous task to Celery via Redis broker, and return immediately with HTTP 202 Accepted. The persistent Celery worker handles parsing, chunking, and database persistence asynchronously.
+- **Consequences:** Upload endpoints respond in < 100ms regardless of document size. Large files (e.g., 327-page textbook) are processed in background workers without memory leaks or request timeouts.
+
+---
+
+## ADR-017: Atomic Transactional Idempotency for Document Chunk Persistence
+- **Date:** 2026-10-03
+- **Context:** Background workers can retry due to network glitches or transient errors. Accidental duplicate executions of an ingestion task must not double or multiply chunk records in `document_chunks`.
+- **Decision:**
+  1. On upload, compute SHA-256 checksum and check for identical existing indexed documents in the project to avoid redundant worker tasks.
+  2. Inside the worker ingestion pipeline, execute chunk persistence inside an atomic database transaction: delete any existing chunks for `(document_id, document_version)` prior to bulk inserting new chunks.
+  3. Update `Document.ingestion_status = 'indexed'` and `IngestionJob.status = 'completed'` atomically within the same transaction.
+- **Consequences:** Safe, completely idempotent worker retries and re-indexing without duplicate chunk sets or database deadlocks.

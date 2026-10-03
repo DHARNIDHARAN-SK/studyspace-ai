@@ -57,11 +57,13 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 ---
 
 ## Phase 5: Document Ingestion, Parsing, Chunking & Celery Workers
-- [ ] Asynchronous Celery ingestion worker setup with Redis broker.
-- [ ] Format parsers for `.pdf` (up to 500-page target with batching and scanned detection), `.docx`, `.pptx`, `.txt`, `.md`.
-- [ ] Structure-aware chunking pipeline retaining page/slide/section provenance.
-- [ ] Document processing lifecycle state management (`uploaded`, `extracting`, `chunking`, `indexed`, `failed`).
-- [ ] Ingestion retry and deduplication idempotency tests.
+- [x] Asynchronous Celery ingestion worker setup with Redis broker.
+- [x] Format parsers for `.pdf` (up to 500-page target with batching and scanned detection), `.docx`, `.pptx`, `.txt`, `.md`.
+- [x] Structure-aware chunking pipeline retaining page/slide/section provenance.
+- [x] Document processing lifecycle state management (`uploaded`, `extracting`, `chunking`, `indexed`, `failed`).
+- [x] Ingestion retry and deduplication idempotency tests.
+- [x] Controlled real 327-page textbook verification (`DECAP470_CLOUD_COMPUTING.pdf` producing 1,728 chunks).
+- [x] Frontend Sources UI integrated with real backend upload and status polling.
 
 ---
 

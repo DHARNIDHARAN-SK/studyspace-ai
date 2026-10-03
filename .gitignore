@@ -26,6 +26,11 @@ wheels/
 .installed.cfg
 *.egg
 
+# Local Upload Storage
+uploads/
+**/uploads/
+services/api/uploads/
+
 # Testing & Linting
 .pytest_cache/
 .mypy_cache/

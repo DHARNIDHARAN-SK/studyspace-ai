@@ -83,7 +83,7 @@ export interface Conversation {
 }
 
 // Sources / Documents (Section 6 & 10)
-export type IngestionStatus = "uploaded" | "processing" | "indexed" | "failed";
+export type IngestionStatus = "uploaded" | "queued" | "extracting" | "chunking" | "processing" | "indexed" | "failed";
 
 export interface ProjectDocument {
   id: string;
@@ -94,9 +94,12 @@ export interface ProjectDocument {
   mime_type: string;
   byte_size: number;
   page_count?: number;
+  chunk_count?: number;
   ingestion_status: IngestionStatus;
+  ingestion_error_code?: string;
   ingestion_error_message?: string;
   created_at: string;
+  indexed_at?: string;
 }
 
 // Student Learning Tools (Section 4.4 & 10)

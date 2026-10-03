@@ -54,8 +54,30 @@ services:
         condition: service_healthy
     env_file:
       - ../../.env
+    volumes:
+      - ../../services/api/uploads:/app/uploads
     ports:
       - "8000:8000"
+
+  # ----------------------------------------------------------------------------
+  # Celery Ingestion Worker service
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: studyspace-worker
+    restart: unless-stopped
+    command: ["celery", "-A", "app.workers.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../../.env
+    volumes:
+      - ../../services/api/uploads:/app/uploads
 
   # ----------------------------------------------------------------------------
   # Frontend Web service

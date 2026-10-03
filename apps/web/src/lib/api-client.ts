@@ -2,6 +2,7 @@ import type {
   HealthResponse,
   Project,
   ProjectCreateInput,
+  ProjectDocument,
   ProjectUpdateInput,
   UserProfile,
 } from "../types";
@@ -95,3 +96,83 @@ export async function deleteProject(token: string, projectId: string): Promise<v
     method: "DELETE",
   });
 }
+
+// -----------------------------------------------------------------------------
+// Document Ingestion API (Phase 5)
+// -----------------------------------------------------------------------------
+export async function listDocuments(token: string, projectId: string): Promise<ProjectDocument[]> {
+  const res = await fetchWithAuth<{ documents: ProjectDocument[]; total: number }>(
+    `/api/v1/projects/${projectId}/documents`,
+    token
+  );
+  return res.documents;
+}
+
+export async function uploadDocument(
+  token: string,
+  projectId: string,
+  file: File
+): Promise<{ document: ProjectDocument; job_id: string; status: string; message: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/documents`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let errorMsg = `Upload failed (${response.status})`;
+    try {
+      const errorData = await response.json();
+      if (errorData.error?.message) {
+        errorMsg = errorData.error.message;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errorMsg);
+  }
+
+  return response.json();
+}
+
+export async function getDocument(
+  token: string,
+  projectId: string,
+  documentId: string
+): Promise<ProjectDocument> {
+  return fetchWithAuth<ProjectDocument>(
+    `/api/v1/projects/${projectId}/documents/${documentId}`,
+    token
+  );
+}
+
+export async function retryDocument(
+  token: string,
+  projectId: string,
+  documentId: string
+): Promise<ProjectDocument> {
+  return fetchWithAuth<ProjectDocument>(
+    `/api/v1/projects/${projectId}/documents/${documentId}/retry`,
+    token,
+    { method: "POST" }
+  );
+}
+
+export async function deleteDocument(
+  token: string,
+  projectId: string,
+  documentId: string
+): Promise<void> {
+  await fetchWithAuth<void>(
+    `/api/v1/projects/${projectId}/documents/${documentId}`,
+    token,
+    { method: "DELETE" }
+  );
+}
+

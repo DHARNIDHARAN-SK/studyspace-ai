@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.auth import router as auth_v1_router
+from app.api.v1.documents import router as documents_v1_router
 from app.api.v1.health import router as health_v1_router, get_health
 from app.api.v1.projects import router as projects_v1_router
 from app.core.config import settings
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(health_v1_router, prefix=settings.API_PREFIX)
     app.include_router(auth_v1_router, prefix=settings.API_PREFIX)
     app.include_router(projects_v1_router, prefix=settings.API_PREFIX)
+    app.include_router(documents_v1_router, prefix=settings.API_PREFIX)
 
     return app
 
