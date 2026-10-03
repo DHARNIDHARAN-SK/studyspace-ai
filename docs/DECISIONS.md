@@ -210,3 +210,24 @@ This document records the architectural and engineering decisions actually made 
      - Graceful degradation: all Redis operations fail open, logging warnings without disrupting student requests if Redis is offline.
   6. **Data Model & Schema Evolution:** Migration `20261003000003_phase8_conversational_rag.sql` adds `selected_query`, `rewrite_enabled`, `rewrite_accepted`, `multi_query_enabled`, `generated_queries`, `cache_hit`, and `rag_metadata` columns to `messages`, with a dedicated index on `(conversation_id, created_at ASC)`.
 - **Consequences:** Multi-turn conversational flow is seamless with verifiable citations, repeated queries return in < 70ms with zero generation overhead, and the student maintains complete transparency and control over reformulated retrieval queries.
+
+---
+
+## ADR-021: Production Supabase Authentication UI, Session Lifecycle, and Flow Hardening (Phase 8.5)
+- **Date:** 2026-10-03
+- **Context:** While basic auth components existed from earlier phases, they included development demo bypasses and mock users, lacked password recovery flows, and needed strict alignment with Supabase Auth configuration (Email, Google OAuth, GitHub OAuth) without exposing secrets or compromising security.
+- **Decision:**
+  1. **Elimination of Fake/Demo Authentication:** Completely removed demo user switchers and synthetic token generators from `AuthContext.tsx` and `LoginPage.tsx`. Real Supabase Auth is the sole authentication mechanism.
+  2. **Dedicated Recovery Pages & Routes:**
+     - Created `ForgotPasswordPage` (`/forgot-password`) calling `supabase.auth.resetPasswordForEmail` with redirection to `${origin}/reset-password`.
+     - Created `ResetPasswordPage` (`/reset-password`) calling `supabase.auth.updateUser({ password })`, with recovery session detection, token parsing, and graceful error messaging for expired tokens.
+  3. **Strict Client-Side Credential Safety:** Frontend consumes only `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (publishable). OAuth Client IDs/Secrets reside exclusively in the Supabase Dashboard. Zero secrets are exposed in client code or Git.
+  4. **OAuth Provider Integration:** Built standard triggers for Google and GitHub via `supabase.auth.signInWithOAuth`, with automatic redirection to `${origin}/dashboard` and query parameter error capturing (`error_description`).
+  5. **Bidirectional Route Protection:**
+     - `ProtectedRoute` denies access to unauthenticated users for `/dashboard`, `/projects`, `/settings`, and `/developer`, redirecting to `/login`.
+     - `PublicAuthRoute` redirects authenticated users away from `/login`, `/signup`, and `/forgot-password` to `/dashboard`.
+     - Loading states prevent content flashing or false redirects during session hydration.
+  6. **Centralized Error Mapping (`authErrors.ts`):** Translates raw Supabase API error strings (`invalid_credentials`, `user_already_exists`, `email_not_confirmed`, rate limits, expired tokens) into student-friendly guidance.
+  7. **Comprehensive Automated Verification:** Added Vitest + `@testing-library/react` suite testing form validations, password matching, OAuth clicks, recovery states, and route guards.
+- **Consequences:** Fully compliant, secure, production-grade authentication flow with persistent sessions, robust recovery handling, and complete coverage by automated unit and integration tests.
+

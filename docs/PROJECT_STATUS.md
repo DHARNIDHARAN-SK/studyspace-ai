@@ -6,8 +6,11 @@
 - **Phase 3 (Database, Storage & Data Model Hardening):** COMPLETED & COMMITTED (`94e797d`)
 - **Phase 4 (Frontend SaaS UI + Project Workspace):** COMPLETED & COMMITTED (`faf7958`)
 - **Phase 5 (Document Ingestion, Parsing, Chunking & Worker):** COMPLETED & COMMITTED (`9aa391a`)
-- **Phase 6 (Embeddings + Baseline Vector RAG):** COMPLETED & VERIFIED
-- **Current Repository State:** Complete baseline RAG pipeline functioning 100% locally with Ollama (`nomic-embed-text:latest` for 768-dim embeddings and `phi4-mini:latest` for chat generation); 1,728 chunks from the real 327-page Cloud Computing textbook embedded and stored in PostgreSQL pgvector with HNSW index; grounded prompt construction with exact page citations; insufficient-evidence guard; real Chat API and frontend Chat UI integration; and 47/47 passing tests.
+- **Phase 6 (Embeddings + Baseline Vector RAG):** COMPLETED & COMMITTED (`0d3faeb`)
+- **Phase 7 (Advanced Hybrid RAG: BM25/Lexical + RRF + Local Reranking):** COMPLETED & COMMITTED (`4dbd4c9`)
+- **Phase 8 (Conversational RAG + Multi-Query + Semantic Cache):** COMPLETED & COMMITTED (`d4b0648`)
+- **Phase 8.5 (Authentication UI & Flow Completion):** COMPLETED & VERIFIED
+- **Current Repository State:** Complete conversational RAG system with multi-query expansion and Redis caching, alongside a hardened, production-grade Supabase Authentication UI supporting Email/Password sign-up/in/recovery, Google/GitHub OAuth client integration, bidirectional route protection (`ProtectedRoute` + `PublicAuthRoute`), centralized error mapping, and 20/20 passing frontend auth tests + 12 passing core backend tests.
 
 ---
 
@@ -133,7 +136,22 @@
 
 ---
 
-## 6. Docker Infrastructure Status
+## 6. Phase 8.5 Implementation Highlights: Authentication UI & Flow Hardening
+- **Production Supabase Integration:** Eliminated all development mock tokens and synthetic user bypasses. All auth flows operate exclusively through official Supabase Auth client methods.
+- **Complete Auth Pages & Lifecycle:**
+  - `LoginPage` (`/login`): Email/password sign-in, "Remember this device" session persistence, forgot password link, Google & GitHub OAuth triggers, query param error capturing (`error_description`), and automatic dashboard redirect for authenticated users.
+  - `SignUpPage` (`/signup`): Display name, email format validation, 8+ character password constraint, password confirmation verification, and email verification status banner.
+  - `ForgotPasswordPage` (`/forgot-password`): Password recovery request dispatching via `supabase.auth.resetPasswordForEmail` with clean confirmation state.
+  - `ResetPasswordPage` (`/reset-password`): Password update via `supabase.auth.updateUser({ password })`, recovery session detection, token hash handling, and expired/invalid session notifications.
+- **Bidirectional Route Protection:**
+  - `ProtectedRoute`: Guards `/dashboard`, `/projects`, `/settings`, and `/developer`, redirecting unauthenticated requests to `/login`.
+  - `PublicAuthRoute`: Prevents authenticated users from viewing `/login`, `/signup`, and `/forgot-password`, automatically redirecting to `/dashboard`.
+- **Centralized Error Formatting (`authErrors.ts`):** Maps technical Supabase error strings (bad credentials, existing users, unverified emails, rate limits, invalid reset tokens) to actionable messages.
+- **Verification:** 20/20 passing Vitest automated frontend tests + `tsc -b && vite build` passing cleanly + all backend auth/db tests passing.
+
+---
+
+## 7. Docker Infrastructure Status
 - `studyspace-postgres`: Up & healthy (Port 5432)
 - `studyspace-redis`: Up & healthy (Port 6379)
 - `studyspace-api`: Up & healthy (Port 8000)
@@ -142,13 +160,14 @@
 
 ---
 
-## 7. Reserved Test Documents Status
+## 8. Reserved Test Documents Status
 - `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact (13,573,276 bytes); 1,728 chunks embedded and verified across Baseline, Advanced Hybrid, and Conversational RAG.
 - `D:\RAG_DATA_TESTING\Network Security Book.pdf`: STRICTLY UNTOUCHED, reserved exclusively for future evaluation.
 
 ---
 
-## 8. Next Phase Boundary
+## 9. Next Phase Boundary
 - **Phase 9:** Metadata Filtering, Dynamic Retrieval Routing, and Adaptive RAG.
-- **Phase 8 Boundary Check:** Conversational RAG, Query Transformation, Multi-Query Expansion, Query Decomposition, Redis Semantic Caching, and Pre-flight Rewrite Preview are fully implemented, tested, and documented. Do NOT auto-start Phase 9 without user instruction.
+- **Phase 8.5 Boundary Check:** Authentication UI and flows are complete, hardened, and verified. Do NOT auto-start Phase 9 without user instruction.
+
 

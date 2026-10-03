@@ -6,7 +6,6 @@ import {
   Copy,
   ExternalLink,
   FileCheck2,
-  HelpCircle,
   Layers,
   RefreshCw,
   Send,

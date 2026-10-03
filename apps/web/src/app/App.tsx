@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "../features/auth/AuthContext";
 import { ProjectProvider } from "../features/projects/ProjectContext";
 import { ProtectedRoute } from "../features/auth/ProtectedRoute";
+import { PublicAuthRoute } from "../features/auth/PublicAuthRoute";
 import { AppShell } from "../components/layout/AppShell";
 import { LandingPage } from "../pages/LandingPage";
 import { AboutPage } from "../pages/AboutPage";
@@ -9,6 +10,8 @@ import { FeaturesPage } from "../pages/FeaturesPage";
 import { ContactPage } from "../pages/ContactPage";
 import { LoginPage } from "../pages/LoginPage";
 import { SignUpPage } from "../pages/SignUpPage";
+import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "../pages/ResetPasswordPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { ProjectsPage } from "../pages/ProjectsPage";
 import { ProjectPage } from "../pages/ProjectPage";
@@ -21,13 +24,21 @@ export function App() {
       <AuthProvider>
         <ProjectProvider>
           <Routes>
-            {/* Public Routes */}
+            {/* Public Marketing Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/features" element={<FeaturesPage />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignUpPage />} />
+
+            {/* Public Authentication Routes (Redirect to /dashboard if already logged in) */}
+            <Route element={<PublicAuthRoute />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            </Route>
+
+            {/* Password Reset Recovery Route */}
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Authenticated Application Routes */}
             <Route element={<ProtectedRoute />}>
@@ -48,3 +59,4 @@ export function App() {
     </BrowserRouter>
   );
 }
+export default App;
