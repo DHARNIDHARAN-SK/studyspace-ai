@@ -1,0 +1,49 @@
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1.health import router as health_v1_router, get_health
+from app.core.config import settings
+from app.core.errors import AppError, app_error_handler, generic_exception_handler
+from app.core.logging import logger, setup_logging
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging(debug=settings.DEBUG)
+    logger.info("Starting StudySpace AI API service [%s mode]", settings.APP_ENV)
+    yield
+    logger.info("Shutting down StudySpace AI API service")
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title=settings.APP_NAME,
+        version="0.1.0",
+        description="StudySpace AI backend API for academic document intelligence.",
+        lifespan=lifespan,
+    )
+
+    # CORS configuration
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Exception Handlers
+    app.add_exception_handler(AppError, app_error_handler)
+    app.add_exception_handler(Exception, generic_exception_handler)
+
+    # Root health endpoint for container / load balancer probes
+    app.add_api_route("/health", get_health, methods=["GET"], tags=["Health"])
+
+    # Versioned API routes
+    app.include_router(health_v1_router, prefix=settings.API_PREFIX)
+
+    return app
+
+
+app = create_app()

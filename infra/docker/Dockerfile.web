@@ -1,0 +1,22 @@
+# ==============================================================================
+# StudySpace AI — Frontend Web Dockerfile
+# Multi-stage build: compiles React + Vite, serves via Nginx unprivileged
+# ==============================================================================
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+COPY apps/web/package*.json ./
+RUN npm ci
+
+COPY apps/web/ ./
+RUN npm run build
+
+# Stage 2: Serve static files
+FROM nginxinc/nginx-unprivileged:alpine-slim AS runner
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 8080
+
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,0 +1,13 @@
+{
+  "name": "studyspace-ai",
+  "private": true,
+  "version": "0.1.0",
+  "description": "StudySpace AI — Academic Document Intelligence SaaS",
+  "scripts": {
+    "dev:web": "npm --prefix apps/web run dev",
+    "build:web": "npm --prefix apps/web run build",
+    "dev:api": "uvicorn app.main:app --app-dir services/api --reload --port 8000",
+    "test:api": "pytest services/api/tests",
+    "test": "npm run test:api && npm run build:web"
+  }
+}
