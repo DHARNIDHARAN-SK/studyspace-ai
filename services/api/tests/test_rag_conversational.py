@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List
 import uuid
 import pytest
@@ -159,18 +159,21 @@ async def test_conversation_context_manager_db_isolation(conv_test_env):
         session.add(conv)
         await session.flush()
 
+        now = datetime.now(timezone.utc)
         msg1 = Message(
             conversation_id=conv.id,
             workspace_id=ws_id,
             role="user",
             content="First question",
             original_user_query="First question",
+            created_at=now - timedelta(seconds=1),
         )
         msg2 = Message(
             conversation_id=conv.id,
             workspace_id=ws_id,
             role="assistant",
             content="First answer",
+            created_at=now,
         )
         session.add_all([msg1, msg2])
         await session.commit()
