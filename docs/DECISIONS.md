@@ -54,3 +54,27 @@ This document records the architectural and engineering decisions actually made 
   - Explicitly enable Row Level Security (RLS) on all user-accessible tables with workspace-scoping policies.
   - Retain local migration files without modifying remote production databases prematurely.
 - **Consequences:** Ensures reproducible, versioned schema state compatible with Supabase CLI and local Docker containers.
+
+---
+
+## ADR-006: JWT Bearer Authentication & Pluggable Token Verification
+- **Date:** 2026-10-03
+- **Context:** The FastAPI backend must validate Supabase Auth tokens passed from the client while remaining 100% testable in offline local environments without relying on third-party network calls.
+- **Decision:** Implement a FastAPI dependency (`get_current_user`) using `PyJWT` that verifies tokens against `SUPABASE_JWT_SECRET` when configured, and supports standard HMAC verification for development/testing tokens. Automatically extract the user identity (`sub`) and ensure their application profile and personal workspace are provisioned idempotently.
+- **Consequences:** Strong cryptographic authentication with seamless offline and CI testability.
+
+---
+
+## ADR-007: Strict Multi-Tenant Workspace Scoping
+- **Date:** 2026-10-03
+- **Context:** Section 1.3 (Principle 2) mandates: "Users must never retrieve another user's documents, chunks, chats, quizzes, exports, or cached answers."
+- **Decision:** Every project CRUD operation must resolve the authenticated user's workspace ID and query the data store using the composite key `(project_id, workspace_id)`. If User A requests a resource belonging to User B, the API returns HTTP 404 (Not Found) rather than disclosing existence. Direct API access without valid tokens returns HTTP 401.
+- **Consequences:** Prevents Insecure Direct Object Reference (IDOR) attacks at the backend layer regardless of frontend checks.
+
+---
+
+## ADR-008: SPA Routing with Protected Layout Shell
+- **Date:** 2026-10-03
+- **Context:** Students need seamless project switching, navigation between learning tools, and persistent context across views.
+- **Decision:** Use `react-router-dom` with a `ProtectedRoute` wrapper guarding the `AppShell`. Provide a persistent left sidebar on desktop with project selector and a mobile drawer. The client stores no server secrets and communicates only with Supabase Auth (via public anon key) and the backend API (via Bearer token).
+- **Consequences:** Responsive, accessible application shell adhering to education SaaS UX patterns.

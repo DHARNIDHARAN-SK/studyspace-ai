@@ -18,13 +18,13 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 
 ---
 
-## Phase 2: Authentication, Workspaces, and Projects Management
-- [ ] Supabase Auth client integration on frontend (Email/Password, OAuth providers).
-- [ ] User profile provisioning trigger on new signup.
-- [ ] Workspace and project domain models, CRUD API routes (`/api/v1/projects`).
-- [ ] Authenticated application shell with persistent left navigation sidebar and project switcher.
-- [ ] Student dashboard baseline (recent projects, empty states).
-- [ ] Automated authorization and multi-tenant isolation unit and integration tests.
+## Phase 2: Authentication, Workspaces, and Projects Management [COMPLETED]
+- [x] Supabase Auth client integration on frontend (Email/Password, OAuth providers).
+- [x] User profile provisioning trigger on new signup.
+- [x] Workspace and project domain models, CRUD API routes (`/api/v1/projects`).
+- [x] Authenticated application shell with persistent left navigation sidebar and project switcher.
+- [x] Student dashboard baseline (recent projects, empty states).
+- [x] Automated authorization and multi-tenant isolation unit and integration tests.
 
 ---
 

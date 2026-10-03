@@ -1,75 +1,81 @@
 # StudySpace AI — Project Status
 
-## 1. Current Phase
-- **Phase:** Phase 1 — Foundation & Environment Setup
-- **Status:** COMPLETED / VERIFIED
+## 1. Project Overview & Phase Status
+- **Phase 1 (Foundation & Monorepo Setup):** COMPLETED & COMMITTED (`997e56f9d2465d153caf541e602db107567c5a6c`)
+- **Phase 2 (Authentication & Multi-Tenant Workspaces):** COMPLETED & VERIFIED
+- **Current Repository State:** Clean, functional monorepo with verified backend JWT authorization, strict tenant isolation, project CRUD APIs, and React frontend shell.
 
-## 2. Completed Work
-- **Repository Initialization:**
-  - Initialized Git repository with `main` branch.
-  - Configured comprehensive `.gitignore` for Python (`.venv`, `__pycache__`, pytest artifacts), Node (`node_modules`, `dist`), secrets (`.env`), and OS files.
-- **Python Backend Foundation (`services/api`):**
-  - Created Python virtual environment with Python 3.12 (`uv venv .venv`).
-  - Configured `pyproject.toml` with FastAPI, Uvicorn, Pydantic, Pydantic-Settings, HTTPX, and Pytest.
-  - Implemented structured application entrypoint (`services/api/app/main.py`) with lifespan logging and CORS middleware.
-  - Implemented typed settings management (`services/api/app/core/config.py`) matching Master Architecture parameters.
-  - Implemented safe error handling (`services/api/app/core/errors.py`) ensuring no stack traces or provider secrets leak to clients.
-  - Implemented versioned health check route (`/api/v1/health`) and root probe route (`/health`).
-  - Implemented database session stub and connection validation helper (`services/api/app/db/session.py`).
-- **Database Migration Foundation (`supabase/migrations`):**
-  - Created `20261003000001_initial_schema.sql` defining all 18 core entities from Section 10 of Master Architecture: `profiles`, `workspaces`, `projects`, `documents`, `document_chunks`, `conversations`, `messages`, `message_citations`, `revision_items`, `revision_item_links`, `quizzes`, `quiz_questions`, `quiz_attempts`, `quiz_responses`, `study_guides`, `exports`, `api_keys`, `usage_events`, and `ingestion_jobs`.
-  - Configured pgvector (768 dimensions), tsvector full-text search index, and baseline Row Level Security (RLS) policies.
-- **Frontend Foundation (`apps/web`):**
-  - Configured Vite + React 18 + TypeScript + Tailwind CSS.
-  - Created application layout and dashboard baseline with live health status check to verify backend connectivity.
-  - Configured Tailwind design tokens and utility helpers (`apps/web/src/lib/utils.ts`).
-  - Successfully verified production build (`npm run build` producing optimized static assets with zero TypeScript or bundling errors).
-- **Environment Configuration:**
-  - Created root `.env.example`, `apps/web/.env.example`, and `services/api/.env.example` with safe placeholder names and comments. No real credentials or secrets committed.
-- **Docker & Infrastructure:**
-  - Created `infra/docker/Dockerfile.api` (multi-stage Python 3.12 container).
-  - Created `infra/docker/Dockerfile.web` (multi-stage Node build + unprivileged Nginx runner).
-  - Created `infra/compose/docker-compose.yml` defining PostgreSQL 16 (pgvector), Redis 7, backend API, and web frontend.
-  - Documented deployment boundaries in `infra/deployment/README.md`.
-- **Root Development Tooling:**
-  - Created root `package.json` with unified scripts (`npm run dev:web`, `npm run dev:api`, `npm run build:web`, `npm run test:api`, `npm run test`).
+---
 
-## 3. Current Repository State
-- Clean, structured monorepo containing `apps/web`, `services/api`, `supabase/migrations`, `infra`, and `docs`.
-- Python 3.12.12 virtual environment operational in `.venv`.
-- Node 24.14.0 / npm 11.19.0 dependencies installed and audited in `apps/web`.
+## 2. Phase 1 Summary
+- **Commit Hash:** `997e56f9d2465d153caf541e602db107567c5a6c`
+- Initialized Git repository on `main` branch.
+- Created Python 3.12 virtual environment (`.venv`), FastAPI backend foundation with typed settings (`pydantic-settings`), CORS, structured error handling (`AppError`), and health checks.
+- Created Vite + React 18 + TypeScript + Tailwind CSS frontend foundation.
+- Added initial database migration (`supabase/migrations/20261003000001_initial_schema.sql`) covering all 18 entities, pgvector, and baseline RLS.
+- Created Docker configurations (`Dockerfile.api`, `Dockerfile.web`, `docker-compose.yml`).
+
+---
+
+## 3. Phase 2 Completed Work
+- **Authentication & Security:**
+  - Supabase Auth integration via `@supabase/supabase-js` on the frontend with support for Email/Password and OAuth (Google, GitHub).
+  - Implemented `AuthContext` with session restoration, token caching, login, signup, logout, and multi-tenant demo account switching.
+  - Implemented backend JWT verification dependency ([`services/api/app/core/auth.py`](file:///D:/studyspace-ai/services/api/app/core/auth.py)) enforcing Bearer token validation and automatic user profile & workspace resolution.
+  - Protected API endpoints returning structured HTTP 401 Unauthorized for unauthenticated or malformed requests.
+- **User Profile & Workspace Provisioning:**
+  - Idempotent profile and personal workspace provisioning ([`/api/v1/auth/provision`](file:///D:/studyspace-ai/services/api/app/api/v1/auth.py) and [`/api/v1/me`](file:///D:/studyspace-ai/services/api/app/api/v1/auth.py)).
+  - Ensures each user has an isolated workspace (`User -> Workspace -> Project`).
+- **Workspaces & Project CRUD APIs:**
+  - Implemented RESTful project routes ([`/api/v1/projects`](file:///D:/studyspace-ai/services/api/app/api/v1/projects.py)):
+    - `POST /api/v1/projects`: Create project in user's authorized workspace.
+    - `GET /api/v1/projects`: List projects in user's authorized workspace.
+    - `GET /api/v1/projects/{id}`: Retrieve project scoped strictly to workspace.
+    - `PATCH /api/v1/projects/{id}`: Update project details.
+    - `DELETE /api/v1/projects/{id}`: Delete project.
+- **Frontend Application Shell:**
+  - Persistent left navigation sidebar on desktop with project switcher, navigation links, and user profile badge with sign out.
+  - Mobile responsive drawer with toggle menu.
+  - Protected route guard ([`apps/web/src/features/auth/ProtectedRoute.tsx`](file:///D:/studyspace-ai/apps/web/src/features/auth/ProtectedRoute.tsx)) redirecting unauthenticated visitors to `/login`.
+  - Student Dashboard with real project counts, recent project cards, and clean empty state call-to-action.
+  - Project Workspace view with tabs (`Chat`, `Sources`, `Revision`, `Quizzes`, `Study Guides`) and breadcrumbs.
+  - Modal dialog for project creation with client-side validation.
+- **Multi-Tenant Isolation & Tests:**
+  - Strict isolation verified via automated tests: User A cannot retrieve, update, or delete User B's project (returns HTTP 404 Not Found).
+  - Unauthenticated requests rejected with HTTP 401.
+
+---
 
 ## 4. Commands Used
-- Environment setup:
-  - `uv venv --clear .venv --python <python3.12-path>`
-  - `uv pip install --python .\.venv\Scripts\python.exe fastapi "uvicorn[standard]" pydantic pydantic-settings python-dotenv httpx pytest pytest-asyncio`
-  - `npm.cmd install` (in `apps/web`)
-- Builds & Tests:
-  - `.\.venv\Scripts\python.exe -m pytest services\api\tests`
-  - `npm.cmd run build` (in `apps/web`)
-  - `.\.venv\Scripts\uvicorn.exe app.main:app --app-dir services/api --port 8000` (live verification)
-  - `npm.cmd run dev` (in `apps/web`, live verification)
+- `npm.cmd install @supabase/supabase-js react-router-dom` (in `apps/web`)
+- `& uv pip install --python .\.venv\Scripts\python.exe "pyjwt[crypto]>=2.8.0"`
+- `& .\.venv\Scripts\python.exe -m pytest services\api\tests`
+- `npm.cmd run build` (in `apps/web`)
+- `git status`
+
+---
 
 ## 5. Tests Performed
-- **Backend Pytest Suite (`services/api/tests`):**
-  - `test_root_health_check`: PASSED (Status 200, status="healthy", version="0.1.0")
-  - `test_v1_health_check`: PASSED (Status 200, status="healthy", version="0.1.0")
-  - `test_app_error_structure`: PASSED (Structured error payload, code="TEST_ERROR", message, action, details)
-  - `test_initial_migration_exists_and_valid`: PASSED (All 18 tables verified, pgvector verified, RLS verified)
-  - Overall result: **4 passed in 0.90s**
+- **Backend Test Suite (8 tests in `services/api/tests`):**
+  - `test_unauthenticated_request_rejected`: PASSED (401 Unauthorized)
+  - `test_malformed_auth_header_rejected`: PASSED (401 Malformed Header)
+  - `test_authenticated_profile_resolution_and_provisioning`: PASSED (Profile & workspace created idempotently)
+  - `test_root_health_check`: PASSED (200 OK)
+  - `test_v1_health_check`: PASSED (200 OK)
+  - `test_app_error_structure`: PASSED (Structured error format)
+  - `test_initial_migration_exists_and_valid`: PASSED (18 entities, pgvector, RLS verified)
+  - `test_project_crud_and_multi_tenant_isolation`: PASSED (Tenant A vs Tenant B isolation, cross-tenant IDOR rejected with 404, CRUD operations verified)
+  - Result: **8 passed in 1.26s (100%)**
 - **Frontend Build Check:**
-  - `tsc -b && vite build`: PASSED (1589 modules transformed, dist output created without error)
-- **Live HTTP Health Probe:**
-  - Ping to `http://127.0.0.1:8000/api/v1/health` and `http://127.0.0.1:8000/health`: HTTP 200 OK.
-  - Ping to `http://localhost:5173/`: HTTP 200 OK with rendered title.
+  - `tsc -b && vite build`: PASSED (1654 modules transformed, dist output created without error)
 
-## 6. Known Issues / Limitations
-- Docker is not currently running as a daemon on the Windows host; local container builds will run once Docker Desktop is started.
-- Windows execution policy blocks `.ps1` wrapper scripts; use `npm.cmd` when invoking npm commands directly in PowerShell.
+---
+
+## 6. Known Limitations
+- External OAuth (Google/GitHub) requires configuring OAuth application credentials and redirect URIs in the remote Supabase dashboard; fallback email/password and development tenant switcher are active for local verification.
+- Local Docker Desktop was not running during Phase 1 verification; Docker Compose file syntax is validated.
+
+---
 
 ## 7. Next Phase
-- **Phase 2:** Authentication, User Profiles, Workspaces, and Projects Management (Frontend auth flow, Supabase Auth integration, Project CRUD APIs, Workspace context).
-
-## 8. Important Environment / Configuration Notes
-- Real secrets (Supabase service role keys, Gemini API key, database passwords) must never be added to repository files or committed to Git.
-- Local development defaults to `LLM_PROVIDER=ollama` and `EMBEDDING_PROVIDER=ollama`.
+- **Phase 3:** Document Ingestion, Multi-Format Parsing (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`), Structure-Aware Chunking, and Background Celery Workers.
