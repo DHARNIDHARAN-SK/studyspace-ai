@@ -15,6 +15,7 @@ class ChatQueryRequest(BaseModel):
     conversation_id: Optional[uuid.UUID] = Field(None, description="Existing conversation to append to")
     top_k: Optional[int] = Field(5, ge=1, le=20, description="Number of relevant chunks to retrieve")
     document_ids: Optional[List[uuid.UUID]] = Field(None, description="Optional document filter")
+    mode: Optional[str] = Field("advanced", description="Retrieval mode: 'baseline' (dense only) or 'advanced' (hybrid + RRF + reranking)")
 
 
 class ChatCitationResponse(BaseModel):
@@ -71,7 +72,7 @@ class MessageListResponse(BaseModel):
     "/projects/{project_id}/chat",
     response_model=ChatQueryResponse,
     status_code=status.HTTP_200_OK,
-    summary="Submit query to baseline RAG pipeline and receive grounded answer",
+    summary="Submit query to RAG pipeline (baseline or advanced hybrid) and receive grounded answer",
 )
 async def chat_with_project_rag(
     project_id: uuid.UUID,
@@ -89,6 +90,7 @@ async def chat_with_project_rag(
         conversation_id=payload.conversation_id,
         top_k=payload.top_k or 5,
         document_ids=payload.document_ids,
+        retrieval_mode=payload.mode,
     )
     return ChatQueryResponse(**result)
 

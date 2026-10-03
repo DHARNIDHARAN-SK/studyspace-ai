@@ -79,15 +79,27 @@
   - `services/api/tests/test_rag_embeddings.py` (3 tests) — PASSED
   - `services/api/tests/test_rag_retrieval.py` (1 test) — PASSED
   - `services/api/tests/test_rag_context_llm.py` (3 tests) — PASSED
-  - `services/api/tests/test_rag_chat_api.py` (1 test) — PASSED
+  - `services/api/tests/test_rag_chat_api.py` (2 tests) — PASSED
+  - `services/api/tests/test_rag_advanced_hybrid.py` (4 tests) — PASSED
   - `services/api/tests/test_rag_baseline_e2e.py` (1 test) — PASSED
-  - **Total Tests Passing:** 47 passed (100% PASS, 0 FAIL)
+  - `services/api/tests/test_real_pdf_ingestion.py` (1 test) — PASSED
+  - **Total Tests Passing:** 53 passed (100% PASS, 0 FAIL)
 - **Frontend Production Build:**
-  - `tsc -b && vite build` — PASSED (1,673 modules transformed in 8.27s, 0 errors)
+  - `tsc -b && vite build` — PASSED (1,673 modules transformed in 8.13s, 0 errors)
 
 ---
 
-## 5. Docker Infrastructure Status
+## 5. Phase 7 Implementation Highlights: Advanced Hybrid RAG
+- **Lexical Retriever (`app/rag/retrieval/lexical_retriever.py`):** PostgreSQL `tsvector` FTS with weighted headings ('A') and body text ('B'), length-normalized ranking (`ts_rank_cd` flag 32), and strict tenant isolation.
+- **Reciprocal Rank Fusion (`app/rag/fusion/rrf.py`):** Multi-stream fusion combining dense vector and lexical rankings with configurable smoothing ($k=60$) and full origin tracking (`dense_rank`, `lexical_rank`, `dense_score`, `lexical_score`, `rrf_score`).
+- **Local Cross-Encoder Reranker (`app/rag/reranking/`):** Deterministic passage re-scoring assessing exact phrase matching, query token coverage, token span proximity, structural heading relevance, and dense similarity without external model weights.
+- **Hybrid Retriever (`app/rag/retrieval/hybrid_retriever.py`):** Concurrent retrieval execution via `asyncio.gather` -> RRF fusion -> Reranking -> Top-$N$ context.
+- **Pipeline Selector & Safety Guardrails:** Dynamic mode switching via `RAG_RETRIEVAL_MODE=baseline|advanced` and per-query request parameter `mode`. Zero external model downloads or cloud API invocations.
+- **Controlled Experiment:** Executed on `DECAP470_CLOUD_COMPUTING.pdf` across 4 evaluation queries; documented in `docs/PHASE_7_COMPARISON_REPORT.md` and `docs/phase_7_experiment_data.json`.
+
+---
+
+## 6. Docker Infrastructure Status
 - `studyspace-postgres`: Up & healthy (Port 5432)
 - `studyspace-redis`: Up & healthy (Port 6379)
 - `studyspace-api`: Up & healthy (Port 8000)
@@ -96,13 +108,13 @@
 
 ---
 
-## 6. Reserved Test Documents Status
-- `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact; 1,728 chunks embedded and verified.
+## 7. Reserved Test Documents Status
+- `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact (13,573,276 bytes); 1,728 chunks embedded and verified across both Baseline and Advanced RAG.
 - `D:\RAG_DATA_TESTING\Network Security Book.pdf`: STRICTLY UNTOUCHED, reserved exclusively for future evaluation.
 
 ---
 
-## 7. Next Phase Boundary
-- **Phase 7:** Advanced Hybrid Retrieval + Full-Text Lexical Search (PostgreSQL `tsvector` / BM25) + Reciprocal Rank Fusion (RRF) + Cross-Encoder Reranking.
-- **Phase 6 Boundary Check:** NO BM25 search was performed. NO reciprocal rank fusion was executed. NO reranker was called. NO query rewriting was applied. Baseline dense vector RAG only.
+## 8. Next Phase Boundary
+- **Phase 8:** Query Transformation, Multi-Query Retrieval, Sub-Query Decomposition, and Semantic Caching.
+- **Phase 7 Boundary Check:** Query rewriting is deferred to Phase 8. Multi-query decomposition is deferred to Phase 8. Semantic caching is deferred to Phase 8. Hybrid retrieval, RRF, and local reranking completed.
 

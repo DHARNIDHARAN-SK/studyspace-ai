@@ -1,111 +1,135 @@
+import re
 import time
 from typing import List, Optional
 import uuid
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import logger
 from app.db.models import Document, DocumentChunk
 from app.db.session import get_session_factory
-from app.rag.embeddings.base import BaseEmbeddingProvider
-from app.rag.embeddings.registry import get_embedding_provider
 from app.rag.retrieval.models import RetrievedChunk
 
 
-class VectorRetriever:
+class LexicalRetriever:
     """
-    Baseline dense vector retrieval service backed by PostgreSQL + pgvector HNSW index.
-    Enforces strict multi-tenant isolation across workspace_id and project_id.
+    Lexical / Full-Text Search (BM25 equivalent) retriever backed by PostgreSQL tsvector.
+    Queries the GIN-indexed search_vector on document_chunks table with weighted relevance
+    (headings weighted 'A', content weighted 'B') and length-normalized ranking.
+    Strictly enforces workspace_id and project_id multi-tenant isolation.
     """
 
-    def __init__(self, embedding_provider: Optional[BaseEmbeddingProvider] = None):
-        self.embedding_provider = embedding_provider or get_embedding_provider()
+    def _sanitize_terms(self, query: str) -> List[str]:
+        """Extract alphanumeric terms suitable for tsquery formatting."""
+        # Find all word tokens
+        tokens = re.findall(r"\b[a-zA-Z0-9_\-']+\b", query)
+        sanitized = []
+        for t in tokens:
+            cleaned = re.sub(r"[^a-zA-Z0-9]", "", t).strip()
+            if len(cleaned) >= 2:
+                sanitized.append(cleaned)
+        return sanitized
 
     async def retrieve(
         self,
         query: str,
         workspace_id: uuid.UUID,
         project_id: uuid.UUID,
-        top_k: int = 5,
+        top_k: int = 20,
         document_ids: Optional[List[uuid.UUID]] = None,
         score_threshold: float = 0.0,
         session: Optional[AsyncSession] = None,
     ) -> List[RetrievedChunk]:
         """
-        Executes vector similarity search against indexed document chunks.
+        Executes PostgreSQL full-text search against indexed document chunks.
         Strictly enforces workspace and project boundaries.
         """
         if not query or not query.strip():
             return []
 
-        start_emb = time.time()
-        # 1. Compute query vector
-        query_vector = await self.embedding_provider.embed_text(query.strip())
-        self.embedding_provider.validate_dimension(query_vector)
-        emb_latency = time.time() - start_emb
+        clean_query = query.strip()
+        terms = self._sanitize_terms(clean_query)
+        if not terms:
+            return []
 
         session_factory = get_session_factory()
         if session is not None:
             return await self._execute_search(
                 session=session,
-                query_vector=query_vector,
+                clean_query=clean_query,
+                terms=terms,
                 workspace_id=workspace_id,
                 project_id=project_id,
                 top_k=top_k,
                 document_ids=document_ids,
                 score_threshold=score_threshold,
-                emb_latency=emb_latency,
             )
 
         async with session_factory() as sess:
             return await self._execute_search(
                 session=sess,
-                query_vector=query_vector,
+                clean_query=clean_query,
+                terms=terms,
                 workspace_id=workspace_id,
                 project_id=project_id,
                 top_k=top_k,
                 document_ids=document_ids,
                 score_threshold=score_threshold,
-                emb_latency=emb_latency,
             )
 
     async def _execute_search(
         self,
         session: AsyncSession,
-        query_vector: List[float],
+        clean_query: str,
+        terms: List[str],
         workspace_id: uuid.UUID,
         project_id: uuid.UUID,
         top_k: int,
         document_ids: Optional[List[uuid.UUID]],
         score_threshold: float,
-        emb_latency: float,
     ) -> List[RetrievedChunk]:
         start_search = time.time()
 
-        # Cosine distance expression using pgvector
-        distance_expr = DocumentChunk.embedding.cosine_distance(query_vector)
-        similarity_expr = (1.0 - distance_expr).label("similarity")
+        # Build disjunctive query string for BM25-like term coverage
+        or_query_str = " | ".join(terms)
+
+        # tsquery expressions:
+        # 1. websearch_tsquery: preserves natural phrasing and AND relationships
+        # 2. or_tsquery: covers any matching term with ts_rank_cd scoring
+        websearch_tsquery = func.websearch_to_tsquery("english", clean_query)
+        or_tsquery = func.to_tsquery("english", or_query_str)
+
+        # Combined tsquery: match either websearch phrase or any token
+        # Combined scoring: ts_rank_cd with normalization flag 32 (scales 0..1 with length normalization)
+        # We give higher weight to exact websearch matches
+        rank_websearch = func.ts_rank_cd(DocumentChunk.search_vector, websearch_tsquery, 32)
+        rank_or = func.ts_rank_cd(DocumentChunk.search_vector, or_tsquery, 32)
+        combined_score = (func.coalesce(rank_websearch, 0.0) * 1.5 + rank_or).label("lexical_score")
 
         stmt = (
             select(
                 DocumentChunk,
                 Document.original_filename,
-                similarity_expr,
+                combined_score,
             )
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(
                 DocumentChunk.workspace_id == workspace_id,
                 DocumentChunk.project_id == project_id,
-                DocumentChunk.embedding.isnot(None),
+                DocumentChunk.search_vector.isnot(None),
                 Document.deleted_at.is_(None),
+                or_(
+                    DocumentChunk.search_vector.op("@@")(or_tsquery),
+                    DocumentChunk.search_vector.op("@@")(websearch_tsquery),
+                ),
             )
         )
 
         if document_ids:
             stmt = stmt.where(DocumentChunk.document_id.in_(document_ids))
 
-        # Order by ascending cosine distance (HNSW index acceleration)
-        stmt = stmt.order_by(distance_expr.asc()).limit(top_k)
+        # Order by highest lexical rank score
+        stmt = stmt.order_by(combined_score.desc()).limit(top_k)
 
         res = await session.execute(stmt)
         rows = res.all()
@@ -113,8 +137,8 @@ class VectorRetriever:
 
         retrieved: List[RetrievedChunk] = []
         for rank, (chunk, filename, score) in enumerate(rows, start=1):
-            sim_score = float(score) if score is not None else 0.0
-            if sim_score < score_threshold:
+            lex_score = float(score) if score is not None else 0.0
+            if lex_score < score_threshold:
                 continue
 
             retrieved.append(
@@ -133,18 +157,18 @@ class VectorRetriever:
                     slide_title=chunk.slide_title,
                     section_path=chunk.section_path,
                     heading=chunk.heading,
-                    similarity_score=sim_score,
-                    dense_score=sim_score,
-                    dense_rank=rank,
-                    retrieval_method="dense",
+                    similarity_score=lex_score,
+                    lexical_score=lex_score,
+                    lexical_rank=rank,
+                    retrieval_method="lexical",
                 )
             )
 
         logger.debug(
-            "Vector search: %d chunks found (embed_time=%.3fs, db_time=%.3fs, top_k=%d)",
+            "Lexical search: %d chunks found (db_time=%.3fs, top_k=%d, query='%s')",
             len(retrieved),
-            emb_latency,
             search_latency,
             top_k,
+            clean_query[:50],
         )
         return retrieved

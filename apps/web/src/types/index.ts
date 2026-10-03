@@ -59,6 +59,11 @@ export interface Citation {
   snippet: string;
   similarity_score?: number;
   citation_label?: string;
+  retrieval_method?: string;
+  dense_rank?: number;
+  lexical_rank?: number;
+  rrf_score?: number;
+  rerank_score?: number;
 }
 
 export interface Message {

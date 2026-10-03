@@ -83,12 +83,13 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 ---
 
 ## Phase 7: Fusion, Reranking, Grounded Generation & Citations
-- [ ] Reciprocal Rank Fusion (RRF) combining dense and lexical search candidates.
-- [ ] Reranking provider interface and candidate filtering.
-- [ ] Generation provider adapters for local Ollama (Llama 3.2) and hosted Gemini.
-- [ ] Evidence-first system prompt enforcing citation tagging and abstention on insufficient context.
-- [ ] Citation validation engine comparing model citations against retrieved chunk IDs and stored page/slide metadata.
-- [ ] End-to-end conversation flow and streaming response handling.
+- [x] Lexical Full-Text Search retriever (`LexicalRetriever`) backed by PostgreSQL `tsvector` and length-normalized ranking.
+- [x] Reciprocal Rank Fusion (`ReciprocalRankFusion`) combining dense and lexical search candidates with configurable smoothing ($k=60$).
+- [x] Reranking provider interface (`BaseReranker`) and deterministic `LocalCrossEncoderReranker`.
+- [x] Strict model guardrails preventing unrequested model/library downloads (`RerankerModelNotFoundError`).
+- [x] End-to-end Hybrid RAG Pipeline (`AdvancedRAGPipeline`) with multi-path metrics and citation provenance.
+- [x] Dual-mode support (`RAG_RETRIEVAL_MODE=baseline|advanced`) in backend and frontend toggle in `ChatTab.tsx`.
+- [x] Controlled evaluation experiment on 327-page textbook `DECAP470_CLOUD_COMPUTING.pdf` across 4 domain queries.
 
 ---
 

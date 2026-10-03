@@ -96,8 +96,8 @@ async def test_chat_api_end_to_end_and_authorization(chat_test_env):
         generation_latency_ms=795,
         token_usage={"prompt_tokens": 120, "completion_tokens": 30},
     )
-
-    with patch("app.services.chat_service.BaselineRAGPipeline.execute", AsyncMock(return_value=mock_rag_result)):
+    with patch("app.services.chat_service.BaselineRAGPipeline.execute", AsyncMock(return_value=mock_rag_result)), \
+         patch("app.services.chat_service.AdvancedRAGPipeline.execute", AsyncMock(return_value=mock_rag_result)):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             # 1. User A successfully submits query to User A's project
             resp = await client.post(
@@ -152,3 +152,78 @@ async def test_chat_api_end_to_end_and_authorization(chat_test_env):
                 json={"query": "Attempting cross-tenant access"},
             )
             assert cross_resp.status_code in (403, 404)
+
+
+@pytest.mark.asyncio
+async def test_chat_api_modes_and_provenance(chat_test_env):
+    env = chat_test_env
+    token_a = generate_test_token(str(env["user_a"]))
+
+    mock_baseline = BaselineRAGResult(
+        query="Test Baseline Query",
+        answer="Baseline Answer",
+        citations=[],
+        retrieved_chunks=[],
+        llm_model="phi4-mini:latest",
+        embedding_model="nomic-embed-text:latest",
+        provider="ollama",
+        total_latency_ms=300,
+        retrieval_latency_ms=50,
+        generation_latency_ms=250,
+        retrieval_mode="baseline",
+    )
+
+    from app.rag.pipeline import AdvancedRAGResult
+    mock_advanced = AdvancedRAGResult(
+        query="Test Advanced Query",
+        answer="Advanced Hybrid Answer",
+        citations=[],
+        retrieved_chunks=[],
+        llm_model="phi4-mini:latest",
+        embedding_model="nomic-embed-text:latest",
+        provider="ollama",
+        total_latency_ms=350,
+        retrieval_latency_ms=60,
+        generation_latency_ms=290,
+        dense_latency_ms=25,
+        lexical_latency_ms=20,
+        fusion_latency_ms=2,
+        rerank_latency_ms=5,
+        dense_candidates_count=15,
+        lexical_candidates_count=15,
+        fused_candidates_count=22,
+        retrieval_mode="advanced",
+    )
+
+    mock_base_exec = AsyncMock(return_value=mock_baseline)
+    mock_adv_exec = AsyncMock(return_value=mock_advanced)
+
+    with patch("app.services.chat_service.BaselineRAGPipeline.execute", mock_base_exec), \
+         patch("app.services.chat_service.AdvancedRAGPipeline.execute", mock_adv_exec):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # Mode: baseline
+            resp_base = await client.post(
+                f"/api/v1/projects/{env['proj_a']}/chat",
+                headers={"Authorization": f"Bearer {token_a}"},
+                json={"query": "Test Baseline Query", "mode": "baseline"},
+            )
+            assert resp_base.status_code == 200
+            data_base = resp_base.json()
+            assert data_base["message"]["content"] == "Baseline Answer"
+            assert data_base["metrics"]["retrieval_mode"] == "baseline"
+            mock_base_exec.assert_awaited_once()
+
+            # Mode: advanced
+            resp_adv = await client.post(
+                f"/api/v1/projects/{env['proj_a']}/chat",
+                headers={"Authorization": f"Bearer {token_a}"},
+                json={"query": "Test Advanced Query", "mode": "advanced"},
+            )
+            assert resp_adv.status_code == 200
+            data_adv = resp_adv.json()
+            assert data_adv["message"]["content"] == "Advanced Hybrid Answer"
+            assert data_adv["metrics"]["retrieval_mode"] == "advanced"
+            assert data_adv["metrics"]["dense_candidates"] == 15
+            assert data_adv["metrics"]["lexical_candidates"] == 15
+            assert data_adv["metrics"]["fused_candidates"] == 22
+            mock_adv_exec.assert_awaited_once()

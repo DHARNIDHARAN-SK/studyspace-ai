@@ -1,0 +1,474 @@
+[
+  {
+    "id": "Q1",
+    "topic": "NIST Cloud Computing Definition",
+    "query": "What is the NIST definition of cloud computing?",
+    "baseline": {
+      "total_latency_ms": 18432,
+      "retrieval_latency_ms": 250,
+      "generation_latency_ms": 18182,
+      "chunks": [
+        {
+          "chunk_index": 218,
+          "page": 39,
+          "heading": "2.7 Cloud Business Models",
+          "score": 0.7994
+        },
+        {
+          "chunk_index": 124,
+          "page": 20,
+          "heading": "Unit 01: Cloud Computing Introduction",
+          "score": 0.7821
+        },
+        {
+          "chunk_index": 266,
+          "page": 50,
+          "heading": "3.5 Other Cloud Services",
+          "score": 0.7554
+        },
+        {
+          "chunk_index": 249,
+          "page": 45,
+          "heading": "Unit 02: Cloud Computing Architecture and Models",
+          "score": 0.7457
+        },
+        {
+          "chunk_index": 7,
+          "page": 5,
+          "heading": "1.1 What is Cloud Computing?",
+          "score": 0.7439
+        }
+      ],
+      "citations_count": 5,
+      "answer": "Based on the provided documents, there are insufficient evidence to directly quote or summarize an official \"NIST definition\" as it pertains specifically and exclusively within these excerpts [DocumentName.pdf]. The closest related content is NIST's goals around cloud computing which aim at providing leadership in guiding industry use of this paradigm for cost savings through rapid deployment. However, the exact formalized definition by NIST isn't provided here.\n\nBased on the provided documents, there are insufficient evidence to directly quote or summarize an official \"NIST definition\" as it pertains specifically and exclusively within these excerpts [DocumentName.pdf]. The closest related content is NIST's goals around cloud computing which aim at providing leadership in guiding industry use of this paradigm for cost savings through rapid deployment. However, the exact formalized definition by NIST isn't provided here.\n\nBased on your request to strictly adhere only to information from given documents and not introduce external knowledge or speculate beyond them:\n\n\"Based on the provided excerpts [DocumentName.pdf], there is insufficient evidence available within these specific sections of DECAP470_CLOUD_COMPUTING.pdf, p. 39 | Unit 2.7 Cloud Business Models; p. 20 | Unit 01: Cloud Computing Introduction; and others to directly quote or summarize an official NIST definition as it pertains specifically [DocumentName.pdf]. The excerpts discuss various aspects related to cloud computing models but do not explicitly provide a formalized \"NIST definition\" of the term.\"",
+      "tokens": {
+        "prompt_tokens": 998,
+        "completion_tokens": 292
+      }
+    },
+    "advanced": {
+      "total_latency_ms": 5296,
+      "retrieval_latency_ms": 94,
+      "generation_latency_ms": 5202,
+      "dense_latency_ms": 93,
+      "lexical_latency_ms": 93,
+      "fusion_latency_ms": 0,
+      "rerank_latency_ms": 1,
+      "dense_candidates": 20,
+      "lexical_candidates": 20,
+      "fused_candidates": 37,
+      "chunks": [
+        {
+          "chunk_index": 248,
+          "page": 45,
+          "heading": "Unit 02: Cloud Computing Architecture and Models",
+          "method": "reranked",
+          "rerank_score": 0.7974,
+          "rrf_score": 0.02674,
+          "dense_score": 0.7298,
+          "lex_score": 0.898
+        },
+        {
+          "chunk_index": 1715,
+          "page": 322,
+          "heading": "Unit 14: Additional Cloud Concepts",
+          "method": "dense+reranked",
+          "rerank_score": 0.7512,
+          "rrf_score": 0.01515,
+          "dense_score": 0.7438,
+          "lex_score": null
+        },
+        {
+          "chunk_index": 7,
+          "page": 5,
+          "heading": "1.1 What is Cloud Computing?",
+          "method": "dense+reranked",
+          "rerank_score": 0.7276,
+          "rrf_score": 0.01538,
+          "dense_score": 0.7439,
+          "lex_score": null
+        },
+        {
+          "chunk_index": 14,
+          "page": 6,
+          "heading": "1.1 What is Cloud Computing?",
+          "method": "dense+reranked",
+          "rerank_score": 0.726,
+          "rrf_score": 0.01449,
+          "dense_score": 0.7308,
+          "lex_score": null
+        },
+        {
+          "chunk_index": 15,
+          "page": 6,
+          "heading": "1.1 What is Cloud Computing?",
+          "method": "dense+reranked",
+          "rerank_score": 0.7259,
+          "rrf_score": 0.01429,
+          "dense_score": 0.7303,
+          "lex_score": null
+        }
+      ],
+      "citations_count": 5,
+      "answer": "Based on the provided documents, there is insufficient evidence to directly quote an official \"NIST\" (National Institute of Standards and Technology) definition of Cloud Computing from these excerpts [DocumentName.pdf]. The sources given are specific course materials for DECAP470_CLOUD_COMPUTING which discuss various aspects related to cloud computing but do not explicitly mention the NIST's formalized definitions or standards.",
+      "tokens": {
+        "prompt_tokens": 1071,
+        "completion_tokens": 79
+      }
+    }
+  },
+  {
+    "id": "Q2",
+    "topic": "Type 1 vs Type 2 Hypervisors in Virtualization",
+    "query": "What are the differences between Type 1 and Type 2 hypervisors in virtualization?",
+    "baseline": {
+      "total_latency_ms": 23516,
+      "retrieval_latency_ms": 87,
+      "generation_latency_ms": 23429,
+      "chunks": [
+        {
+          "chunk_index": 1307,
+          "page": 253,
+          "heading": "Unit 11: Virtual Machine",
+          "score": 0.7716
+        },
+        {
+          "chunk_index": 1274,
+          "page": 245,
+          "heading": "Unit 11: Virtual Machine",
+          "score": 0.7615
+        },
+        {
+          "chunk_index": 1171,
+          "page": 219,
+          "heading": "10.3 Pros of Virtualization",
+          "score": 0.7566
+        },
+        {
+          "chunk_index": 1237,
+          "page": 235,
+          "heading": "A. VMM",
+          "score": 0.7514
+        },
+        {
+          "chunk_index": 1275,
+          "page": 245,
+          "heading": "Unit 11: Virtual Machine",
+          "score": 0.75
+        }
+      ],
+      "citations_count": 5,
+      "answer": "Based on the provided documents from DECAP470_CLOUD_COMPUTING.pdf, there is sufficient evidence to outline some of the key differences between Type 1 (bare metal) and Type 2 (hosted) hypervisors:\n\nType 1 Hypervisors:\n- They run directly atop hardware without an underlying host operating system. This allows them direct access to physical resources [DECAP470_CLOUD_COMPUTING.pdf, p. 245].\n- These are considered more efficient due to the reduced overhead of communicating with a separate OS; they interact natively through ISA (Instruction Set Architecture) interfaces exposed by the hardware.\n- Type I hypervisors can run and manage guest operating systems without additional layers or host software [DECAP470_CLOUD_COMPUTING.pdf, p. 245].\n- They are typically used in server environments that require high security levels due to their direct interaction with physical resources; examples include Microsoft Hyper-V, Citrix XenServer, VMware ESXi, Oracle VM Server for SPARC.\n  \nType 2 Hypervisors:\n- These run on top of a standard operating system (host OS) and provide virtualization features as an application layer [DECAP470_CLOUD_COMPUTING.pdf, p. 245].\n- Type II hypervisors are generally less efficient than their type I counterparts because they have to go through the host OS for resource management.\n  \nIn summary:\nType 1 Hypervisors (Bare Metal) - Directly interact with hardware; run natively on physical resources without a host operating system, leading to better efficiency and security [DECAP470_CLOUD_COMPUTING.pdf].\nType 2 Hypervisors (Hosted) - Run as applications within an existing OS environment which can lead to additional overhead compared to Type I hypervisors. They are typically used for development or testing purposes rather than production servers due to their less efficient resource management and interaction with the host operating system [DECAP470_CLOUD_COMPUTING.pdf].",
+      "tokens": {
+        "prompt_tokens": 931,
+        "completion_tokens": 400
+      }
+    },
+    "advanced": {
+      "total_latency_ms": 22134,
+      "retrieval_latency_ms": 122,
+      "generation_latency_ms": 22012,
+      "dense_latency_ms": 120,
+      "lexical_latency_ms": 120,
+      "fusion_latency_ms": 0,
+      "rerank_latency_ms": 1,
+      "dense_candidates": 20,
+      "lexical_candidates": 20,
+      "fused_candidates": 32,
+      "chunks": [
+        {
+          "chunk_index": 1277,
+          "page": 247,
+          "heading": "Unit 11: Virtual Machine",
+          "method": "reranked",
+          "rerank_score": 0.7505,
+          "rrf_score": 0.02765,
+          "dense_score": 0.7482,
+          "lex_score": 0.8529
+        },
+        {
+          "chunk_index": 1274,
+          "page": 245,
+          "heading": "Unit 11: Virtual Machine",
+          "method": "reranked",
+          "rerank_score": 0.7297,
+          "rrf_score": 0.02964,
+          "dense_score": 0.7615,
+          "lex_score": 0.875
+        },
+        {
+          "chunk_index": 1275,
+          "page": 245,
+          "heading": "Unit 11: Virtual Machine",
+          "method": "dense+reranked",
+          "rerank_score": 0.6704,
+          "rrf_score": 0.01538,
+          "dense_score": 0.75,
+          "lex_score": null
+        },
+        {
+          "chunk_index": 1307,
+          "page": 253,
+          "heading": "Unit 11: Virtual Machine",
+          "method": "dense+reranked",
+          "rerank_score": 0.6656,
+          "rrf_score": 0.01639,
+          "dense_score": 0.7716,
+          "lex_score": null
+        },
+        {
+          "chunk_index": 1271,
+          "page": 244,
+          "heading": "11.4 Hypervisors",
+          "method": "reranked",
+          "rerank_score": 0.6495,
+          "rrf_score": 0.02705,
+          "dense_score": 0.6975,
+          "lex_score": 0.875
+        }
+      ],
+      "citations_count": 5,
+      "answer": "Based on the provided documents from DECAP470_CLOUD_COMPUTING.pdf:\n\nType 1 Hypervisors, also known as bare metal or native VMs (Virtual Machines), run directly atop hardware and interact closely without an intermediary operating system [DocumentName.pdf, p. 245]. They can access physical resources straight away which reduces the overhead of communication with a host OS compared to Type 2 hypervisors; this makes them more efficient for servers that handle heavy loads or require high security levels (e.g., Microsoft Hyper-V and Citrix XenServer) [DocumentName.pdf, p. 245].\n\nType 2 Hypervisors run on top of standard operating systems like Windows Server with HyperV or RedHat Linux with KVM; they provide virtualization features to guest OSs but are considered less efficient due to the additional overhead from communicating through a host OS (e.g., VMware Workstation and Fusion, Parallels Desktop) [DocumentName.pdf, p. 245].\n\nIn summary:\n- Type 1 hypervisors run directly on hardware without an intermediary operating system.\n- They can access physical resources more efficiently with less communication overhead compared to type 2 hypervisors.\n\nType 2 Hypervisors are applications that operate within standard OS environments and provide virtualization features for guest systems. Their efficiency is reduced due to the additional layer of a host OS [DocumentName.pdf, p. 245].\n\nIn conclusion:\n- Type 1 (bare metal) VMs run directly on hardware.\n- They offer better performance with less overhead compared to type 2 hypervisors.\n\nType 2 Hypervisors are applications that operate within standard operating systems and provide virtualization features for guest OSs; they have reduced efficiency due to the additional layer of a host OS [DocumentName.pdf, p. 245].",
+      "tokens": {
+        "prompt_tokens": 1279,
+        "completion_tokens": 367
+      }
+    }
+  },
+  {
+    "id": "Q3",
+    "topic": "Cloud Service Models (SaaS vs PaaS vs IaaS)",
+    "query": "Compare SaaS, PaaS, and IaaS service models",
+    "baseline": {
+      "total_latency_ms": 35923,
+      "retrieval_latency_ms": 86,
+      "generation_latency_ms": 35836,
+      "chunks": [
+        {
+          "chunk_index": 304,
+          "page": 57,
+          "heading": "Unit 03: Cloud Services",
+          "score": 0.8335
+        },
+        {
+          "chunk_index": 1354,
+          "page": 262,
+          "heading": "Unit 12: Security and standards in Cloud",
+          "score": 0.7628
+        },
+        {
+          "chunk_index": 1640,
+          "page": 305,
+          "heading": "Unit 13: Application of Cloud Computing and Related Technologies",
+          "score": 0.7617
+        },
+        {
+          "chunk_index": 1351,
+          "page": 262,
+          "heading": "Unit 12: Security and standards in Cloud",
+          "score": 0.7569
+        },
+        {
+          "chunk_index": 1348,
+          "page": 262,
+          "heading": "Unit 12: Security and standards in Cloud",
+          "score": 0.7569
+        }
+      ],
+      "citations_count": 4,
+      "answer": "Based on the provided documents [DECAP470_CLOUD_COMPUTING.pdf], here is how you can compare Software as a Service (SaaS), Platform as a Service (PaaS), and Infrastructure as a Service (IaaS):\n\n- **Software as a Service (SaaS)**: SaaS provides access to web software applications that are used for completing business tasks. It does not involve the provision of virtual platforms or tools, nor is it concerned with storing information in an infrastructure [DECAP470_CLOUD_COMPUTING.pdf | p. 57].\n\n- **Platform as a Service (PaaS)**: PaaS offers web software and applications that enable users to create their own apps for business purposes without managing the underlying hardware or virtual machines, which are instead managed by Microsoft Azure's cloud infrastructure [DECAP470_CLOUD_COMPUTING.pdf | p. 57].\n\n- **Infrastructure as a Service (IaaS)**: IaaS provides access to resources such as physical servers and storage systems that can be used for creating platforms on demand without the need of managing virtual machines or software applications directly, though it does not offer integrated functionalities like PaaS [DECAP470_CLOUD_COMPUTING.pdf | p. 57].\n\nAdditionally:\n\n- IaaS has less integration in terms of security compared to SaaS and offers more control over infrastructure but requires customers to manage the underlying hardware resources themselves.\n\n- The responsibility for maintaining any below-boundary-level mechanisms, such as physical servers or storage systems that are part of an IaaS offering (like Microsoft Azure), falls on the customer [DECAP470_CLOUD_COMPUTING.pdf | p. 262].\n\nIn summary:\n\n| Service Model | Description |\n| --- | --- |\n| SaaS | Provides web software and apps for business tasks, no infrastructure management required by users; most integrated security features are provided directly to end-users (Microsoft Azure) [DECAP470_CLOUD_COMPUTING.pdf]. |\n| PaaS | Offers virtual platforms with tools that allow app development without managing the underlying hardware or storage systems. Microsoft Azure provides this service model for customers who want more control over their applications and data than SaaS offers but less responsibility compared to IaaS (Microsoft Azure) [DECAP470_CLOUD_COMPUTING.pdf]. |\n| IaaS | Delivers virtual machines, servers, networks, operating systems that users can use as a foundation on which they build custom infrastructure. Customers are responsible for managing the hardware resources and security mechanisms below boundary level; Microsoft Azure provides this service model to customers who want more control over their computing environment [DECAP470_CLOUD_COMPUTING.pdf]. |\n\nNote: The excerpts provided do not contain explicit comparisons of SaaS, PaaS, or IaaS in terms of specific features like virtual machines and storage systems. However, the descriptions given can be used as a basis for comparison based on general knowledge about these service models [DECAP470_CLOUD_COMPUTING.pdf].",
+      "tokens": {
+        "prompt_tokens": 620,
+        "completion_tokens": 611
+      }
+    },
+    "advanced": {
+      "total_latency_ms": 18807,
+      "retrieval_latency_ms": 135,
+      "generation_latency_ms": 18672,
+      "dense_latency_ms": 133,
+      "lexical_latency_ms": 133,
+      "fusion_latency_ms": 0,
+      "rerank_latency_ms": 2,
+      "dense_candidates": 20,
+      "lexical_candidates": 20,
+      "fused_candidates": 32,
+      "chunks": [
+        {
+          "chunk_index": 304,
+          "page": 57,
+          "heading": "Unit 03: Cloud Services",
+          "method": "reranked",
+          "rerank_score": 0.7961,
+          "rrf_score": 0.03009,
+          "dense_score": 0.8335,
+          "lex_score": 0.8684
+        },
+        {
+          "chunk_index": 305,
+          "page": 57,
+          "heading": "Unit 03: Cloud Services",
+          "method": "reranked",
+          "rerank_score": 0.7798,
+          "rrf_score": 0.02896,
+          "dense_score": 0.7045,
+          "lex_score": 0.8958
+        },
+        {
+          "chunk_index": 415,
+          "page": 77,
+          "heading": "11. B 12. A 13. C 14. C 15. D",
+          "method": "reranked",
+          "rerank_score": 0.7239,
+          "rrf_score": 0.03058,
+          "dense_score": 0.7216,
+          "lex_score": 0.898
+        },
+        {
+          "chunk_index": 283,
+          "page": 53,
+          "heading": "Unit 03: Cloud Services",
+          "method": "reranked",
+          "rerank_score": 0.6813,
+          "rrf_score": 0.02826,
+          "dense_score": 0.7239,
+          "lex_score": 0.8611
+        },
+        {
+          "chunk_index": 306,
+          "page": 57,
+          "heading": "Unit 03: Cloud Services",
+          "method": "dense+reranked",
+          "rerank_score": 0.6469,
+          "rrf_score": 0.01429,
+          "dense_score": 0.7144,
+          "lex_score": null
+        }
+      ],
+      "citations_count": 5,
+      "answer": "Based on the provided documents [DECAP470_CLOUD_COMPUTING.pdf], here is how you can compare Software-as-a-Service (SaaS), Platform-as-a-Service (PaaS), and Infrastructure-as-a-Service (IaaS):\n\n- **Software-as-a-Service (SaaS):** SaaS provides web software applications that are used to complete business tasks. It offers end-users direct access to the application without needing any additional infrastructure or platform services [DECAP470_CLOUD_COMPUTING.pdf, p. 57].\n\n- **Platform-as-a-Service (PaaS):** PaaS is a cloud computing service model where developers can build applications and services over the internet using tools supplied by the provider through their web browser. It includes preconfigured features that customers may subscribe to according to their needs [DECAP470_CLOUD_COMPUTING.pdf, p. 57].\n\n- **Infrastructure-as-a-Service (IaaS):** IaaS provides virtualized computing resources over the cloud and is used primarily by network architects for infrastructure requirements such as access to physical servers or storage systems like virtual machines and virtual storage.\n\nIn summary:\n- SaaS delivers software applications directly usable without additional services.\n- PaaS offers a platform with tools that developers use to create, test, deploy apps (Figure 9 in DECAP470_CLOUD_COMPUTING.pdf).\n- IaaS provides the underlying infrastructure components like servers or networks [DECAP470_CLOUD_COMPUTING.pdf].",
+      "tokens": {
+        "prompt_tokens": 1096,
+        "completion_tokens": 304
+      }
+    }
+  },
+  {
+    "id": "Q4",
+    "topic": "Cloud Storage Security Risks & Mitigation",
+    "query": "What are the main security risks and mitigation strategies in cloud storage?",
+    "baseline": {
+      "total_latency_ms": 31697,
+      "retrieval_latency_ms": 87,
+      "generation_latency_ms": 31610,
+      "chunks": [
+        {
+          "chunk_index": 1360,
+          "page": 263,
+          "heading": "12.2 Security Challenges in Cloud Computing",
+          "score": 0.7605
+        },
+        {
+          "chunk_index": 1356,
+          "page": 263,
+          "heading": "12.2 Security Challenges in Cloud Computing",
+          "score": 0.7567
+        },
+        {
+          "chunk_index": 1341,
+          "page": 261,
+          "heading": "12.1 Cloud Computing Security",
+          "score": 0.7359
+        },
+        {
+          "chunk_index": 1361,
+          "page": 263,
+          "heading": "12.2 Security Challenges in Cloud Computing",
+          "score": 0.7304
+        },
+        {
+          "chunk_index": 1344,
+          "page": 261,
+          "heading": "12.1 Cloud Computing Security",
+          "score": 0.73
+        }
+      ],
+      "citations_count": 5,
+      "answer": "Based on the provided documents, here is an analysis of some major security challenges associated with using Cloud Computing services:\n\n1) Security Challenge #2 - Threats to data privacy: One significant concern for businesses moving their operations and sensitive information into cloud storage environments (cloud computing), as mentioned in [Source: DECAP470_CLOUD_COMPUTING.pdf | p. 263], is the risk of a higher chance of experiencing security breaches compared with legacy architectures due to hackers becoming more adept at exploiting vulnerabilities within these systems.\n\nMitigation Strategy for Security Challenge #2:\nWhile not explicitly stated, it can be inferred that businesses should implement robust cloud security measures and controls as part of their mitigation strategy. These could include encryption techniques [Source: DECAP470_CLOUD_COMPUTING.pdf | p. 261], access control mechanisms to ensure only authorized users have data privacy rights within the system (as hinted by \"Security Challenge #3\"), regular audits, vulnerability assessments for identifying weaknesses in security management systems and applying necessary updates or patches.\n\n2) Security Challenges related to Cloud Computing: The documents also mention that there are two types of challenges faced when using cloud services - those encountered from a provider's perspective [Source: DECAP470_CLOUD_COMPUTING.pdf | p. 261], as well as the ones experienced by customers who host applications or store data on these platforms.\n\nMitigation Strategy for Security Challenges related to Cloud Computing:\nThe mitigation strategy would involve implementing security controls that are designed specifically with cloud computing in mind, such as those mentioned under \"Cloud Security Controls\" [Source: DECAP470_CLOUD_COMPUTING.pdf | p. 261]. These could include deterrent measures like warning signs or property indicators for potential attackers (as a metaphorical example), but more importantly would involve the deployment of actual security controls that safeguard against weaknesses in cloud systems and reduce attack effects.\n\nIn summary, while specific mitigation strategies are not detailed within these excerpts [Source: DECAP470_CLOUD_COMPUTING.pdf], it is clear from \"Cloud Security Controls\" section (p. 261) that a combination of deterrent measures along with actual security controls tailored for the unique environment provided by cloud computing services would be essential in addressing and mitigating major risks associated to data privacy, confidentiality breaches as well as other challenges faced when using Cloud Computing platforms.\n\nNote: The mitigation strategies suggested above are inferred from general knowledge about best practices within IT Security. They should not replace specific recommendations that may come directly out of the provided excerpts or additional resources on cloud security [DocumentName.pdf].",
+      "tokens": {
+        "prompt_tokens": 1131,
+        "completion_tokens": 514
+      }
+    },
+    "advanced": {
+      "total_latency_ms": 35302,
+      "retrieval_latency_ms": 108,
+      "generation_latency_ms": 35194,
+      "dense_latency_ms": 106,
+      "lexical_latency_ms": 106,
+      "fusion_latency_ms": 0,
+      "rerank_latency_ms": 2,
+      "dense_candidates": 20,
+      "lexical_candidates": 20,
+      "fused_candidates": 38,
+      "chunks": [
+        {
+          "chunk_index": 1425,
+          "page": 274,
+          "heading": "Unit 12: Security and standards in Cloud",
+          "method": "reranked",
+          "rerank_score": 0.6974,
+          "rrf_score": 0.02686,
+          "dense_score": 0.7174,
+          "lex_score": 0.8889
+        },
+        {
+          "chunk_index": 1341,
+          "page": 261,
+          "heading": "12.1 Cloud Computing Security",
+          "method": "reranked",
+          "rerank_score": 0.6738,
+          "rrf_score": 0.02853,
+          "dense_score": 0.7359,
+          "lex_score": 0.8837
+        },
+        {
+          "chunk_index": 163,
+          "page": 27,
+          "heading": "2.3 Issues in Cloud Computing",
+          "method": "dense+reranked",
+          "rerank_score": 0.6321,
+          "rrf_score": 0.01493,
+          "dense_score": 0.7294,
+          "lex_score": null
+        },
+        {
+          "chunk_index": 1366,
+          "page": 264,
+          "heading": "Unit 12: Security and standards in Cloud",
+          "method": "dense+reranked",
+          "rerank_score": 0.624,
+          "rrf_score": 0.01429,
+          "dense_score": 0.7179,
+          "lex_score": null
+        },
+        {
+          "chunk_index": 1370,
+          "page": 264,
+          "heading": "Unit 12: Security and standards in Cloud",
+          "method": "dense+reranked",
+          "rerank_score": 0.624,
+          "rrf_score": 0.01408,
+          "dense_score": 0.7179,
+          "lex_score": null
+        }
+      ],
+      "citations_count": 4,
+      "answer": "Based on the provided documents:\n\nThe primary **security risk** identified for businesses using cloud services is related to storing sensitive data, particularly business-critical information (DECAP470_CLOUD_COMPUTING.pdf [p. 27]). The concern arises because this type of highly confidential and important data may be vulnerable if stored in a single location or even across multiple locations due to replication strategies employed by some service providers for redundancy purposes.\n\nAnother significant **security risk** is the potential vulnerability when changing cloud storage vendors, which can lead to issues such as shifting all existing data between different platforms that have varying techniques (DECAP470_CLOUD_COMPUTING.pdf [p. 264]).\n\nAs far as mitigation strategies are concerned:\n\n1. Businesses should ensure they implement a robust **cloud security and management system** before transferring important organizational data into the cloud, which would help in managing these risks effectively.\n\n2. The replication of sensitive business-critical information across different geographic locations can be seen both ways: it is part of an organization's strategy to mitigate risk by not relying on one single point for storage (DECAP470_CLOUD_COMPUTING.pdf [p. 27]). However, this also increases the attack surface as data could potentially get hacked from any replicated cloud server.\n\n3. The documents do mention **security controls** in general terms but don't specify which ones are used to mitigate risks; however, it is implied that there should be a set of security measures (DECAP470_CLOUD_COMPUTING.pdf [p. 274]). These could include preventive and protective strategies aimed at strengthening the system against incidents by reducing vulnerabilities.\n\n4. The documents also highlight **compliance with rules** as part of cloud computing's broad range, which suggests that adhering to regulatory standards is a key strategy for mitigating security risks (DECAP470_CLOUD_COMPUTING.pdf [p. 261]).\n\nIn summary:\n\n- Main Security Risks: Storing sensitive data in the cloud and potential vulnerabilities during vendor changes.\n- Mitigation Strategies:\n   - Implementing robust **cloud security management systems** before transferring important organizational information to ensure proper handling of risks (DECAP470_CLOUD_COMPUTING.pdf [p. 27]).\n   - Ensuring compliance with regulatory standards as part of a broader set of policies and controls aimed at protecting cloud resources.\n   - Considering the replication strategy for sensitive data across different geographic locations, which can be seen both ways in terms of risk mitigation (DECAP470_CLOUD_COMPUTING.pdf [p. 27]).\n\nThe documents do not provide specific details on particular security measures or strategies beyond these general observations and implications.\n\nBased on the provided documents, there is insufficient evidence to answer this question with detailed specifics about individual **security controls** used in cloud storage for risk mitigation (DECAP470_CLOUD_COMPUTING.pdf [p. 274]).",
+      "tokens": {
+        "prompt_tokens": 973,
+        "completion_tokens": 574
+      }
+    }
+  }
+]

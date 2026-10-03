@@ -5,7 +5,10 @@ import uuid
 
 @dataclass
 class RetrievedChunk:
-    """Represents a retrieved document chunk with provenance metadata and similarity score."""
+    """
+    Represents a retrieved document chunk with provenance metadata, similarity score,
+    and multi-path hybrid retrieval provenance (dense, lexical, RRF, reranking).
+    """
     chunk_id: uuid.UUID
     document_id: uuid.UUID
     document_filename: str
@@ -21,3 +24,12 @@ class RetrievedChunk:
     section_path: Optional[str]
     heading: Optional[str]
     similarity_score: float
+
+    # Phase 7 Provenance Attributes
+    dense_score: Optional[float] = None
+    dense_rank: Optional[int] = None
+    lexical_score: Optional[float] = None
+    lexical_rank: Optional[int] = None
+    rrf_score: Optional[float] = None
+    rerank_score: Optional[float] = None
+    retrieval_method: str = "dense"  # "dense" | "lexical" | "hybrid" | "reranked"

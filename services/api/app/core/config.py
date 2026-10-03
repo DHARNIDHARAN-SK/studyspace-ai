@@ -55,11 +55,16 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: str = "ollama"
     EMBEDDING_MODEL_ID: str = "nomic-embed-text:latest"
     EMBEDDING_VECTOR_DIMENSIONS: int = 768
-    RERANKER_PROVIDER: str = "disabled"  # disabled | local | remote
+    RERANKER_PROVIDER: str = "local"  # disabled | local | remote
     RERANKER_MODEL_ID: str | None = None
 
-    # Baseline RAG Settings
+    # Baseline & Advanced RAG Settings
+    RAG_RETRIEVAL_MODE: str = "advanced"  # baseline | advanced
     RAG_DEFAULT_TOP_K: int = 5
+    RAG_DENSE_TOP_K: int = 20
+    RAG_LEXICAL_TOP_K: int = 20
+    RAG_RRF_K: int = 60
+    RAG_RERANK_TOP_N: int = 5
     RAG_MAX_CONTEXT_CHARS: int = 8000
 
     # Background Tasks & Cache

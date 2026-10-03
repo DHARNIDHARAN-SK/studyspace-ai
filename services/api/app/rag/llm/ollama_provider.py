@@ -17,7 +17,7 @@ class OllamaLLMProvider(BaseLLMProvider):
         self,
         base_url: Optional[str] = None,
         model_id: Optional[str] = None,
-        timeout: float = 90.0,
+        timeout: float = 180.0,
     ):
         model = model_id or settings.OLLAMA_CHAT_MODEL
         super().__init__(provider_name="ollama", model_id=model)
@@ -46,8 +46,9 @@ class OllamaLLMProvider(BaseLLMProvider):
             payload["system"] = system_prompt
 
         start_time = time.time()
+        timeout_config = httpx.Timeout(self.timeout, connect=30.0, read=self.timeout)
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout_config) as client:
                 resp = await client.post(url, json=payload)
                 resp.raise_for_status()
                 data = resp.json()

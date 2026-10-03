@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.errors import AppError, NotFoundError, ForbiddenError
 from app.db.models import Conversation, Document, DocumentChunk, Message, MessageCitation, Project, Workspace
 from app.db.session import get_session_factory
-from app.rag.pipeline import BaselineRAGPipeline, BaselineRAGResult
+from app.rag.pipeline import AdvancedRAGPipeline, AdvancedRAGResult, BaselineRAGPipeline, BaselineRAGResult
 
 
 def utc_now() -> datetime:
@@ -18,12 +18,19 @@ def utc_now() -> datetime:
 
 class ChatService:
     """
-    Coordinates baseline RAG execution with conversation and citation persistence.
+    Coordinates baseline and advanced hybrid RAG execution with conversation and citation persistence.
     Enforces tenant boundaries and authorization.
     """
 
-    def __init__(self, pipeline: Optional[BaselineRAGPipeline] = None):
-        self.pipeline = pipeline or BaselineRAGPipeline()
+    def __init__(
+        self,
+        baseline_pipeline: Optional[BaselineRAGPipeline] = None,
+        advanced_pipeline: Optional[AdvancedRAGPipeline] = None,
+    ):
+        self.baseline_pipeline = baseline_pipeline or BaselineRAGPipeline()
+        self.advanced_pipeline = advanced_pipeline or AdvancedRAGPipeline()
+        # Backward compatibility alias
+        self.pipeline = self.advanced_pipeline if settings.RAG_RETRIEVAL_MODE == "advanced" else self.baseline_pipeline
 
     async def get_or_create_conversation(
         self,
@@ -70,10 +77,13 @@ class ChatService:
         conversation_id: Optional[uuid.UUID] = None,
         top_k: int = settings.RAG_DEFAULT_TOP_K,
         document_ids: Optional[List[uuid.UUID]] = None,
+        retrieval_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Executes baseline RAG pipeline and persists messages & citations to PostgreSQL.
+        Executes baseline or advanced hybrid RAG pipeline and persists messages & citations to PostgreSQL.
         """
+        active_mode = (retrieval_mode or settings.RAG_RETRIEVAL_MODE or "advanced").lower().strip()
+
         session_factory = get_session_factory()
         async with session_factory() as session:
             # 1. Authorize project access
@@ -107,14 +117,25 @@ class ChatService:
             session.add(user_msg)
             await session.flush()
 
-            # 4. Execute Baseline RAG Pipeline
-            rag_result = await self.pipeline.execute(
-                query=query.strip(),
-                workspace_id=workspace_id,
-                project_id=project_id,
-                top_k=top_k,
-                document_ids=document_ids,
-            )
+            # 4. Execute Selected RAG Pipeline (Baseline or Advanced Hybrid)
+            if active_mode == "baseline":
+                rag_result = await self.baseline_pipeline.execute(
+                    query=query.strip(),
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    top_k=top_k,
+                    document_ids=document_ids,
+                )
+            else:
+                rag_result = await self.advanced_pipeline.execute(
+                    query=query.strip(),
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    dense_top_k=settings.RAG_DENSE_TOP_K,
+                    lexical_top_k=settings.RAG_LEXICAL_TOP_K,
+                    final_top_k=top_k or settings.RAG_RERANK_TOP_N,
+                    document_ids=document_ids,
+                )
 
             # 5. Persist Assistant Message
             assistant_msg = Message(
@@ -130,13 +151,14 @@ class ChatService:
             session.add(assistant_msg)
             await session.flush()
 
-            # 6. Persist Citations
+            # 6. Persist Citations with Provenance
             persisted_citations = []
             for order, cit in enumerate(rag_result.citations, start=1):
                 valid_chunk_id = None
+                matched_chunk = None
                 if cit.chunk_id:
-                    chk = await session.get(DocumentChunk, cit.chunk_id)
-                    if chk:
+                    matched_chunk = await session.get(DocumentChunk, cit.chunk_id)
+                    if matched_chunk:
                         valid_chunk_id = cit.chunk_id
 
                 valid_doc_id = None
@@ -154,6 +176,7 @@ class ChatService:
                     "similarity_score": cit.similarity_score,
                     "citation_label": cit.citation_label,
                     "snippet": cit.snippet,
+                    "retrieval_mode": active_mode,
                 }
                 citation_record = MessageCitation(
                     message_id=assistant_msg.id,
@@ -179,6 +202,23 @@ class ChatService:
             conv.updated_at = utc_now()
             await session.commit()
 
+            metrics = {
+                "total_latency_ms": rag_result.total_latency_ms,
+                "retrieval_latency_ms": rag_result.retrieval_latency_ms,
+                "generation_latency_ms": rag_result.generation_latency_ms,
+                "retrieved_chunks": len(rag_result.retrieved_chunks),
+                "model": rag_result.llm_model,
+                "embedding_model": rag_result.embedding_model,
+                "retrieval_mode": getattr(rag_result, "retrieval_mode", active_mode),
+                "dense_latency_ms": getattr(rag_result, "dense_latency_ms", 0),
+                "lexical_latency_ms": getattr(rag_result, "lexical_latency_ms", 0),
+                "fusion_latency_ms": getattr(rag_result, "fusion_latency_ms", 0),
+                "rerank_latency_ms": getattr(rag_result, "rerank_latency_ms", 0),
+                "dense_candidates": getattr(rag_result, "dense_candidates_count", 0),
+                "lexical_candidates": getattr(rag_result, "lexical_candidates_count", 0),
+                "fused_candidates": getattr(rag_result, "fused_candidates_count", 0),
+            }
+
             return {
                 "conversation_id": str(conv.id),
                 "message": {
@@ -191,14 +231,7 @@ class ChatService:
                     "latency_ms": assistant_msg.latency_ms,
                     "model": assistant_msg.model_id,
                 },
-                "metrics": {
-                    "total_latency_ms": rag_result.total_latency_ms,
-                    "retrieval_latency_ms": rag_result.retrieval_latency_ms,
-                    "generation_latency_ms": rag_result.generation_latency_ms,
-                    "retrieved_chunks": len(rag_result.retrieved_chunks),
-                    "model": rag_result.llm_model,
-                    "embedding_model": rag_result.embedding_model,
-                },
+                "metrics": metrics,
             }
 
     async def list_conversations(

@@ -186,6 +186,7 @@ export interface ChatQueryPayload {
   conversation_id?: string;
   top_k?: number;
   document_ids?: string[];
+  mode?: "baseline" | "advanced";
 }
 
 export interface ChatQueryResponse {
@@ -198,6 +199,14 @@ export interface ChatQueryResponse {
     retrieved_chunks: number;
     model: string;
     embedding_model: string;
+    retrieval_mode?: string;
+    dense_latency_ms?: number;
+    lexical_latency_ms?: number;
+    fusion_latency_ms?: number;
+    rerank_latency_ms?: number;
+    dense_candidates?: number;
+    lexical_candidates?: number;
+    fused_candidates?: number;
   };
 }
 
