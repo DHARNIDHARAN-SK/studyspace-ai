@@ -160,3 +160,21 @@ This document records the architectural and engineering decisions actually made 
   2. Inside the worker ingestion pipeline, execute chunk persistence inside an atomic database transaction: delete any existing chunks for `(document_id, document_version)` prior to bulk inserting new chunks.
   3. Update `Document.ingestion_status = 'indexed'` and `IngestionJob.status = 'completed'` atomically within the same transaction.
 - **Consequences:** Safe, completely idempotent worker retries and re-indexing without duplicate chunk sets or database deadlocks.
+
+---
+
+## ADR-018: Local Baseline RAG Pipeline with Ollama (nomic-embed-text & phi4-mini)
+- **Date:** 2026-10-03
+- **Context:** Phase 6 requires establishing the first working baseline RAG pipeline. Local development and testing through Phase 11 strictly mandates local Ollama inference without cloud dependencies or paid APIs (no Gemini). Database schema requires 768-dimensional dense vectors with HNSW cosine indexing.
+- **Decision:**
+  1. **Provider Abstraction:** Implement `BaseEmbeddingProvider` and `BaseLLMProvider` interfaces extensible for future providers, with active factory resolution strictly pointing to local Ollama.
+  2. **Embedding Model & Dimensions:** Use `nomic-embed-text:latest` producing 768-dimensional vectors. Validate `len(vector) == 768` prior to database writes with `DimensionMismatchError`.
+  3. **Batch Chunk Embedding:** Implement `ChunkEmbeddingService` processing chunks in batches of 32 via Ollama `/api/embed`. Skip re-embedding already embedded chunks to ensure idempotency.
+  4. **Dense Vector Retrieval:** Implement `VectorRetriever` computing query embeddings and querying PostgreSQL via pgvector's cosine distance `<=>` operator (accelerated by `idx_chunks_embedding_hnsw`).
+  5. **Strict Multi-Tenant Isolation:** Enforce `workspace_id` and `project_id` filters in retrieval and chat queries. Verified with negative cross-tenant automated tests.
+  6. **Context Construction & Citations:** `ContextBuilder` aggregates retrieved chunks, eliminates duplicate content, limits text to 8,000 characters, and constructs verifiable `[Document, p. X]` citation metadata.
+  7. **Grounded Baseline Prompt:** Prompt `phi4-mini:latest` to answer strictly based on provided context excerpts and explicitly emit an insufficient-evidence statement if the query is not covered by the documents.
+  8. **Conversation Persistence & Chat API:** Implement `ChatService` persisting user/assistant turns in `conversations`, `messages`, and `message_citations`. Connect to frontend `ChatTab.tsx` with real citation inspection, latency measurement, and model badge.
+  9. **Phase Boundaries:** Advanced retrieval (BM25, reciprocal rank fusion, cross-encoder reranking) and query transformations (rewriting, decomposition) are strictly excluded from Phase 6 and deferred to Phase 7 and 8.
+- **Consequences:** Zero-cost, 100% offline baseline RAG with full citation traceability, verified on the real 327-page textbook `DECAP470_CLOUD_COMPUTING.pdf`.
+

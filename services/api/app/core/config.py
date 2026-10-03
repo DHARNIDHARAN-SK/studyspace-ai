@@ -47,16 +47,20 @@ class Settings(BaseSettings):
     # LLM Providers
     LLM_PROVIDER: str = "ollama"  # ollama | gemini
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_CHAT_MODEL: str = "llama3.2"
+    OLLAMA_CHAT_MODEL: str = "phi4-mini:latest"
     GEMINI_API_KEY: str | None = None
     GEMINI_CHAT_MODEL: str = "gemini-1.5-flash"
 
     # Embeddings & Reranker
     EMBEDDING_PROVIDER: str = "ollama"
-    EMBEDDING_MODEL_ID: str = "nomic-embed-text"
+    EMBEDDING_MODEL_ID: str = "nomic-embed-text:latest"
     EMBEDDING_VECTOR_DIMENSIONS: int = 768
     RERANKER_PROVIDER: str = "disabled"  # disabled | local | remote
     RERANKER_MODEL_ID: str | None = None
+
+    # Baseline RAG Settings
+    RAG_DEFAULT_TOP_K: int = 5
+    RAG_MAX_CONTEXT_CHARS: int = 8000
 
     # Background Tasks & Cache
     REDIS_URL: str | None = None

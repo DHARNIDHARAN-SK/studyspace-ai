@@ -29,6 +29,7 @@ async def run_document_ingestion(
     project_id: uuid.UUID | str,
     job_id: Optional[uuid.UUID | str] = None,
     storage_provider: Optional[Any] = None,
+    generate_embeddings: bool = False,
 ) -> Dict[str, Any]:
     """
     Executes the complete document ingestion pipeline:
@@ -257,10 +258,17 @@ async def run_document_ingestion(
                         "duration_seconds": round(duration, 3),
                     }
 
+    embedded_count = 0
+    if generate_embeddings:
+        from app.rag.embeddings.service import ChunkEmbeddingService
+        embed_service = ChunkEmbeddingService()
+        embedded_count = await embed_service.embed_document_chunks(document_id=doc_uuid)
+
     logger.info(
-        "Successfully completed ingestion for document_id=%s: %d chunks created in %.2fs",
+        "Successfully completed ingestion for document_id=%s: %d chunks created, %d embedded in %.2fs",
         doc_uuid,
         len(raw_chunks),
+        embedded_count,
         duration,
     )
 
@@ -270,6 +278,7 @@ async def run_document_ingestion(
         "status": "indexed",
         "page_count": parsed_doc.page_count or parsed_doc.slide_count,
         "chunk_count": len(raw_chunks),
+        "embedded_count": embedded_count,
         "parser_name": parser.parser_name,
         "duration_seconds": round(duration, 3),
     }

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  AlertCircle,
   BookOpen,
   Bot,
   Copy,
@@ -14,114 +15,131 @@ import { ConversationSidebar } from "./ConversationSidebar";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
+import { useAuth } from "../auth/AuthContext";
+import {
+  getConversationMessages,
+  listConversations,
+  sendChatMessage,
+} from "../../lib/api-client";
 import type { Citation, Conversation, Message, Project } from "../../types";
 
 interface ChatTabProps {
   project: Project;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function ChatTab({ project }: ChatTabProps) {
+  const { token } = useAuth();
+
   // State for conversations list
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: "conv-1",
-      project_id: project.id,
-      workspace_id: project.workspace_id,
-      title: "Core Concepts & Fundamentals",
-      is_pinned: true,
-      status: "active",
-      created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]);
-
-  const [activeConvId, setActiveConvId] = useState<string>("conv-1");
-
-  // State for messages in the active conversation
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "msg-1",
-      conversation_id: "conv-1",
-      role: "user",
-      content: "Can you summarize the primary principles covered in this project's materials?",
-      created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    },
-    {
-      id: "msg-2",
-      conversation_id: "conv-1",
-      role: "assistant",
-      content:
-        "Based on your course materials, the fundamental principles consist of:\n\n1. **Grounded Retrieval**: Generating responses strictly derived from verified syllabus chunks rather than external memorization.\n2. **Multi-Tenant Isolation**: Ensuring private study workspaces are isolated at the database layer via Row-Level Security.\n3. **Verifiable Citations**: Tracing every statement to its exact source document, slide number, and page range.",
-      citations: [
-        {
-          id: "cit-1",
-          document_id: "doc-1",
-          document_title: `${project.name} Syllabus & Reference.pdf`,
-          page_start: 3,
-          page_end: 4,
-          section_path: "Section 1.2 — Architecture Foundations",
-          snippet:
-            "Coursework intelligence must strictly bind generated answers to verified uploaded context with immutable page-level provenance.",
-        },
-      ],
-      created_at: new Date(Date.now() - 3600000 * 2 + 1000).toISOString(),
-      latency_ms: 820,
-    },
-  ]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string>("");
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const [inputQuery, setInputQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [queryRewriterEnabled, setQueryRewriterEnabled] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [inspectingCitation, setInspectingCitation] = useState<Citation | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  // Fetch project conversations on mount
+  const fetchConversations = useCallback(async () => {
+    if (!token) return;
+    try {
+      const convList = await listConversations(token, project.id);
+      setConversations(convList);
+      if (convList.length > 0 && !activeConvId) {
+        setActiveConvId(convList[0].id);
+      }
+    } catch (err) {
+      console.warn("Could not load conversations:", err);
+    }
+  }, [token, project.id, activeConvId]);
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Fetch messages when active conversation changes
+  useEffect(() => {
+    if (!token || !activeConvId || !UUID_REGEX.test(activeConvId)) {
+      setMessages([]);
+      return;
+    }
+
+    let isMounted = true;
+    const loadMessages = async () => {
+      setIsLoadingHistory(true);
+      try {
+        const history = await getConversationMessages(token, project.id, activeConvId);
+        if (isMounted) {
+          setMessages(history);
+        }
+      } catch (err) {
+        console.warn("Failed to load message history:", err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingHistory(false);
+        }
+      }
+    };
+
+    loadMessages();
+    return () => {
+      isMounted = false;
+    };
+  }, [token, project.id, activeConvId]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputQuery.trim() || isSending) return;
+    if (!inputQuery.trim() || isSending || !token) return;
 
     const userText = inputQuery.trim();
     setInputQuery("");
+    setChatError(null);
 
-    const newMsg: Message = {
-      id: `msg-${Date.now()}`,
-      conversation_id: activeConvId,
+    const tempUserMsg: Message = {
+      id: `temp-${Date.now()}`,
+      conversation_id: activeConvId || "pending",
       role: "user",
       content: userText,
       created_at: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, newMsg]);
+    setMessages((prev) => [...prev, tempUserMsg]);
     setIsSending(true);
 
-    // Simulated grounded response for Phase 4 UI verification
-    // (Master Architecture: real RAG pipeline connects in Phase 6)
-    setTimeout(() => {
-      const assistantMsg: Message = {
-        id: `msg-${Date.now() + 1}`,
-        conversation_id: activeConvId,
-        role: "assistant",
-        content: `I have analyzed your query regarding "${userText}". In Phase 6, the hybrid retrieval engine (dense vector search + BM25 lexical search) will execute against your indexed documents and provide a grounded response with page-level citations.`,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
+    try {
+      const validConvId = UUID_REGEX.test(activeConvId) ? activeConvId : undefined;
+      const resp = await sendChatMessage(token, project.id, {
+        query: userText,
+        conversation_id: validConvId,
+        top_k: 5,
+      });
+
+      // Update active conversation ID if newly created
+      if (!validConvId && resp.conversation_id) {
+        setActiveConvId(resp.conversation_id);
+        fetchConversations();
+      }
+
+      // Append assistant message
+      setMessages((prev) => [...prev, resp.message]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to execute baseline RAG query.";
+      setChatError(msg);
+      // Remove temporary pending user message or keep it with error note
+    } finally {
       setIsSending(false);
-    }, 700);
+    }
   };
 
   const handleNewChat = () => {
-    const newConv: Conversation = {
-      id: `conv-${Date.now()}`,
-      project_id: project.id,
-      workspace_id: project.workspace_id,
-      title: "New Conversation",
-      is_pinned: false,
-      status: "active",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setConversations([newConv, ...conversations]);
-    setActiveConvId(newConv.id);
+    setActiveConvId("");
     setMessages([]);
+    setChatError(null);
   };
 
   const handleRename = (id: string, newTitle: string) => {
@@ -155,13 +173,13 @@ export function ChatTab({ project }: ChatTabProps) {
   };
 
   const starterPrompts = [
-    "Summarize the key takeaways and formulas",
-    "Explain the core principles in simple terms",
-    "What are the main potential exam topics?",
+    "Summarize the key cloud service models and their differences",
+    "Explain virtualization and hypervisors in cloud computing",
+    "What are the main security risks and mitigation strategies in cloud storage?",
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col md:flex-row min-h-[560px]">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col md:flex-row min-h-[580px]">
       {/* Conversation Sidebar */}
       <ConversationSidebar
         conversations={conversations}
@@ -179,38 +197,52 @@ export function ChatTab({ project }: ChatTabProps) {
         <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between text-xs gap-2">
           <div className="flex items-center space-x-2 text-slate-500">
             <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Scope: <strong className="text-slate-700">All Project Documents</strong></span>
+            <span>Scope: <strong className="text-slate-700">Project Course Materials</strong></span>
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-400">Index: pgvector (768d, HNSW)</span>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setQueryRewriterEnabled(!queryRewriterEnabled)}
-              className={`flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
-                queryRewriterEnabled
-                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                  : "bg-slate-100 text-slate-500 border border-slate-200"
-              }`}
-              title="Query rewriter contextualizes follow-up questions"
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>Query Rewriting: {queryRewriterEnabled ? "ON" : "OFF"}</span>
-            </button>
+          <div className="flex items-center space-x-2">
+            <Badge variant="indigo" className="font-mono text-[10px]">
+              phi4-mini:latest
+            </Badge>
           </div>
         </div>
 
+        {/* Error notification banner */}
+        {chatError && (
+          <div className="px-4 py-2 bg-rose-50 border-b border-rose-200 text-rose-700 text-xs flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{chatError}</span>
+            </div>
+            <button
+              onClick={() => setChatError(null)}
+              className="text-rose-500 hover:text-rose-800 text-[11px] font-semibold"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Message History Area */}
-        <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-5 max-h-[500px]">
-          {messages.length === 0 ? (
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-5 max-h-[520px]">
+          {isLoadingHistory ? (
+            <div className="py-12 text-center text-slate-400 text-xs flex items-center justify-center space-x-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+              <span>Loading conversation history...</span>
+            </div>
+          ) : messages.length === 0 ? (
             /* Empty State */
             <div className="py-12 text-center max-w-md mx-auto space-y-4">
               <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Start a grounded study session</h3>
+                <h3 className="text-sm font-bold text-slate-900">Baseline RAG Study Session</h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Ask questions about your uploaded textbooks, slide decks, and lecture notes.
-                  Every answer will include verifiable page citations.
+                  Ask questions about your uploaded course materials. Every response is strictly
+                  grounded using local vector retrieval with real page citations.
                 </p>
               </div>
 
@@ -281,7 +313,11 @@ export function ChatTab({ project }: ChatTabProps) {
                   {/* Action row (Assistant only) */}
                   {m.role === "assistant" && (
                     <div className="mt-2.5 pt-2 flex items-center justify-between text-[10px] text-slate-400">
-                      <span>{m.latency_ms ? `${m.latency_ms} ms` : "Grounded response"}</span>
+                      <div className="flex items-center space-x-2">
+                        <span>{m.latency_ms ? `${m.latency_ms} ms` : "Grounded response"}</span>
+                        <span>•</span>
+                        <span className="font-mono">{m.model || "phi4-mini:latest"}</span>
+                      </div>
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleCopy(m.id, m.content)}
@@ -312,7 +348,7 @@ export function ChatTab({ project }: ChatTabProps) {
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-500 flex items-center space-x-2">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                <span>Retrieving grounded course passages...</span>
+                <span>Executing vector retrieval & generating grounded answer with phi4-mini...</span>
               </div>
             </div>
           )}
@@ -369,8 +405,8 @@ export function ChatTab({ project }: ChatTabProps) {
             </div>
 
             <p className="text-[11px] text-slate-400">
-              This passage was retrieved directly from the verified course source file.
-              The model is constrained to construct claims exclusively from stored evidence.
+              This passage was retrieved directly from the verified course source file via pgvector similarity search.
+              The response was generated strictly from the retrieved evidence.
             </p>
 
             <div className="flex justify-end pt-2 border-t border-slate-100">

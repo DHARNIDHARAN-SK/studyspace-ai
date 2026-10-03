@@ -1,5 +1,7 @@
 import type {
+  Conversation,
   HealthResponse,
+  Message,
   Project,
   ProjectCreateInput,
   ProjectDocument,
@@ -175,4 +177,66 @@ export async function deleteDocument(
     { method: "DELETE" }
   );
 }
+
+// -----------------------------------------------------------------------------
+// Baseline RAG & Chat API (Phase 6)
+// -----------------------------------------------------------------------------
+export interface ChatQueryPayload {
+  query: string;
+  conversation_id?: string;
+  top_k?: number;
+  document_ids?: string[];
+}
+
+export interface ChatQueryResponse {
+  conversation_id: string;
+  message: Message;
+  metrics: {
+    total_latency_ms: number;
+    retrieval_latency_ms: number;
+    generation_latency_ms: number;
+    retrieved_chunks: number;
+    model: string;
+    embedding_model: string;
+  };
+}
+
+export async function sendChatMessage(
+  token: string,
+  projectId: string,
+  payload: ChatQueryPayload
+): Promise<ChatQueryResponse> {
+  return fetchWithAuth<ChatQueryResponse>(
+    `/api/v1/projects/${projectId}/chat`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function listConversations(
+  token: string,
+  projectId: string
+): Promise<Conversation[]> {
+  const res = await fetchWithAuth<{ conversations: Conversation[]; total: number }>(
+    `/api/v1/projects/${projectId}/conversations`,
+    token
+  );
+  return res.conversations;
+}
+
+export async function getConversationMessages(
+  token: string,
+  projectId: string,
+  conversationId: string
+): Promise<Message[]> {
+  const res = await fetchWithAuth<{ messages: Message[]; total: number }>(
+    `/api/v1/projects/${projectId}/conversations/${conversationId}/messages`,
+    token
+  );
+  return res.messages;
+}
+
 

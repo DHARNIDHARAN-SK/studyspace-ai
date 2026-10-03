@@ -57,6 +57,8 @@ export interface Citation {
   slide_number?: number;
   section_path?: string;
   snippet: string;
+  similarity_score?: number;
+  citation_label?: string;
 }
 
 export interface Message {
@@ -69,6 +71,7 @@ export interface Message {
   citations?: Citation[];
   created_at: string;
   latency_ms?: number;
+  model?: string;
 }
 
 export interface Conversation {

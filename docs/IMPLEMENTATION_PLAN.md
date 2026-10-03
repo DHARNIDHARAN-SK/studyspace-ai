@@ -67,12 +67,18 @@ This roadmap translates `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` into phased, test
 
 ---
 
-## Phase 6: Embeddings, Vector Storage & Hybrid Retrieval
-- [ ] Provider abstraction for Embedding models (local Ollama nomic-embed-text / hosted alternatives).
-- [ ] Batch vector generation and pgvector storage with dimension consistency checks.
-- [ ] PostgreSQL full-text search index (`tsvector`) generation for lexical search.
-- [ ] Parallel retrieval implementation (dense vector similarity + lexical full-text query) strictly scoped to user/workspace/project.
-- [ ] Retrieval tests verifying isolation and accuracy.
+## Phase 6: Embeddings & Baseline Vector RAG
+- [x] Provider abstraction for Embedding models (`BaseEmbeddingProvider`, `OllamaEmbeddingProvider` using `nomic-embed-text:latest`).
+- [x] Dimension consistency validation (strictly enforcing 768 dimensions matching pgvector schema).
+- [x] Batch chunk embedding service with idempotency guards (`ChunkEmbeddingService`).
+- [x] Dense vector similarity retrieval service backed by pgvector HNSW index (`VectorRetriever`).
+- [x] Strict multi-tenant isolation enforced at database query level (`workspace_id` + `project_id`) with negative tests.
+- [x] Traceable context construction and structured citation mapping (`ContextBuilder`).
+- [x] Grounded baseline prompt with strict insufficient-evidence abstention rules.
+- [x] LLM provider abstraction and local Ollama implementation (`phi4-mini:latest`).
+- [x] Chat API endpoints and conversation/message persistence (`ChatService`).
+- [x] Frontend Chat UI integrated with real RAG responses, citations, latency display, and `phi4-mini:latest` badge.
+- [x] Real 327-page textbook verification (`DECAP470_CLOUD_COMPUTING.pdf` 1,728 chunks embedded and queried).
 
 ---
 
