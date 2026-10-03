@@ -1,0 +1,673 @@
+{
+  "benchmark_metadata": {
+    "timestamp": "2026-10-03T16:12:36Z",
+    "evaluation_document": "DECAP470_CLOUD_COMPUTING.pdf",
+    "document_pages": 327,
+    "document_chunks": 1728,
+    "llm_model": "phi4-mini:latest",
+    "embedding_model": "nomic-embed-text:latest",
+    "reranker": "Local Deterministic Cross-Feature Reranker (n-gram, coverage, proximity, structure, dense)",
+    "lexical_engine": "PostgreSQL tsvector / ts_rank_cd",
+    "total_test_queries": 8
+  },
+  "pipelines": {
+    "baseline": {
+      "pipeline_name": "Phase 6 Baseline RAG",
+      "retrieval_mode": "baseline",
+      "total_queries": 8,
+      "retrieval_metrics": {
+        "mean_recall_at_k": 0.6458,
+        "mean_mrr": 0.9167,
+        "mean_ndcg": 0.9046
+      },
+      "context_metrics": {
+        "mean_context_precision": 0.575,
+        "mean_context_recall": 0.6101
+      },
+      "answer_metrics": {
+        "mean_faithfulness": 0.6758,
+        "mean_answer_relevance": 0.5918
+      },
+      "latency_metrics": {
+        "mean_latency_ms": 27647.5,
+        "p50_latency_ms": 27129.0,
+        "p95_latency_ms": 38033.3,
+        "mean_retrieval_latency_ms": 747.6,
+        "mean_generation_latency_ms": 26899.5
+      },
+      "efficiency_metrics": {
+        "cache_hit_rate": 0.0,
+        "total_inferences": 8,
+        "total_tokens": 10578
+      },
+      "item_results": [
+        {
+          "item_id": "EVAL-01",
+          "query": "Who benefits from cloud computing according to the notes, specifically regarding collaborators?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.6667,
+          "mrr": 1.0,
+          "ndcg": 1.0,
+          "context_precision": 1.0,
+          "context_recall": 0.6667,
+          "faithfulness": 0.8333,
+          "answer_relevance": 0.5263,
+          "total_latency_ms": 30200,
+          "cache_hit": false,
+          "retrieved_pages": [
+            10,
+            122,
+            7,
+            7,
+            7
+          ]
+        },
+        {
+          "item_id": "EVAL-02",
+          "query": "What is a Community Cloud and who does it serve?",
+          "category": "concept_explanation",
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "ndcg": 0.9785,
+          "context_precision": 0.6,
+          "context_recall": 1.0,
+          "faithfulness": 0.3846,
+          "answer_relevance": 0.9444,
+          "total_latency_ms": 24657,
+          "cache_hit": false,
+          "retrieved_pages": [
+            36,
+            35,
+            121,
+            40,
+            122
+          ]
+        },
+        {
+          "item_id": "EVAL-03",
+          "query": "Compare Infrastructure as a Service (IaaS) and Software as a Service (SaaS) regarding consumer management responsibility.",
+          "category": "comparative_analysis",
+          "recall_at_k": 0.6667,
+          "mrr": 1.0,
+          "ndcg": 0.8919,
+          "context_precision": 1.0,
+          "context_recall": 0.6667,
+          "faithfulness": 0.2,
+          "answer_relevance": 0.3043,
+          "total_latency_ms": 16958,
+          "cache_hit": false,
+          "retrieved_pages": [
+            262,
+            262,
+            262,
+            52,
+            52
+          ]
+        },
+        {
+          "item_id": "EVAL-04",
+          "query": "What are the essential characteristics of cloud computing according to NIST?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.6667,
+          "mrr": 0.3333,
+          "ndcg": 0.5438,
+          "context_precision": 0.4,
+          "context_recall": 0.6667,
+          "faithfulness": 0.5833,
+          "answer_relevance": 0.9444,
+          "total_latency_ms": 26167,
+          "cache_hit": false,
+          "retrieved_pages": [
+            5,
+            39,
+            13,
+            5,
+            39
+          ]
+        },
+        {
+          "item_id": "EVAL-05",
+          "query": "What are the primary disadvantages and security concerns of cloud storage?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.5,
+          "mrr": 1.0,
+          "ndcg": 1.0,
+          "context_precision": 0.2,
+          "context_recall": 0.5,
+          "faithfulness": 0.8333,
+          "answer_relevance": 0.5263,
+          "total_latency_ms": 19173,
+          "cache_hit": false,
+          "retrieved_pages": [
+            11,
+            263,
+            309,
+            25,
+            264
+          ]
+        },
+        {
+          "item_id": "EVAL-06",
+          "query": "How does a Public Cloud differ from a Private Cloud regarding accessibility and infrastructure ownership?",
+          "category": "comparative_analysis",
+          "recall_at_k": 0.6667,
+          "mrr": 1.0,
+          "ndcg": 0.9721,
+          "context_precision": 0.8,
+          "context_recall": 0.6667,
+          "faithfulness": 0.5714,
+          "answer_relevance": 0.65,
+          "total_latency_ms": 37746,
+          "cache_hit": false,
+          "retrieved_pages": [
+            33,
+            40,
+            46,
+            29,
+            40
+          ]
+        },
+        {
+          "item_id": "EVAL-07",
+          "query": "What are its primary benefits for software developers?",
+          "category": "conversational_followup",
+          "recall_at_k": 0.5,
+          "mrr": 1.0,
+          "ndcg": 1.0,
+          "context_precision": 0.2,
+          "context_recall": 0.2857,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.3913,
+          "total_latency_ms": 28091,
+          "cache_hit": false,
+          "retrieved_pages": [
+            54,
+            180,
+            305,
+            176,
+            56
+          ]
+        },
+        {
+          "item_id": "EVAL-08",
+          "query": "How does virtualization differ from traditional dual-core computing and what are its trade-offs?",
+          "category": "conversational_followup",
+          "recall_at_k": 0.5,
+          "mrr": 1.0,
+          "ndcg": 0.8503,
+          "context_precision": 0.4,
+          "context_recall": 0.4286,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.4474,
+          "total_latency_ms": 38188,
+          "cache_hit": false,
+          "retrieved_pages": [
+            238,
+            220,
+            220,
+            223,
+            221
+          ]
+        }
+      ]
+    },
+    "advanced": {
+      "pipeline_name": "Phase 7 Advanced RAG",
+      "retrieval_mode": "advanced",
+      "total_queries": 8,
+      "retrieval_metrics": {
+        "mean_recall_at_k": 0.5417,
+        "mean_mrr": 0.7125,
+        "mean_ndcg": 0.7337
+      },
+      "context_metrics": {
+        "mean_context_precision": 0.475,
+        "mean_context_recall": 0.5476
+      },
+      "answer_metrics": {
+        "mean_faithfulness": 0.9011,
+        "mean_answer_relevance": 0.532
+      },
+      "latency_metrics": {
+        "mean_latency_ms": 18534.5,
+        "p50_latency_ms": 16565.5,
+        "p95_latency_ms": 29537.9,
+        "mean_retrieval_latency_ms": 160.9,
+        "mean_generation_latency_ms": 18372.9
+      },
+      "efficiency_metrics": {
+        "cache_hit_rate": 0.0,
+        "total_inferences": 8,
+        "total_tokens": 10197
+      },
+      "item_results": [
+        {
+          "item_id": "EVAL-01",
+          "query": "Who benefits from cloud computing according to the notes, specifically regarding collaborators?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.6667,
+          "mrr": 1.0,
+          "ndcg": 1.0,
+          "context_precision": 0.8,
+          "context_recall": 0.6667,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.4737,
+          "total_latency_ms": 12996,
+          "cache_hit": false,
+          "retrieved_pages": [
+            10,
+            7,
+            7,
+            7,
+            41
+          ]
+        },
+        {
+          "item_id": "EVAL-02",
+          "query": "What is a Community Cloud and who does it serve?",
+          "category": "concept_explanation",
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "ndcg": 1.0,
+          "context_precision": 0.4,
+          "context_recall": 1.0,
+          "faithfulness": 0.6,
+          "answer_relevance": 1.0,
+          "total_latency_ms": 16291,
+          "cache_hit": false,
+          "retrieved_pages": [
+            35,
+            40,
+            122,
+            7,
+            7
+          ]
+        },
+        {
+          "item_id": "EVAL-03",
+          "query": "Compare Infrastructure as a Service (IaaS) and Software as a Service (SaaS) regarding consumer management responsibility.",
+          "category": "comparative_analysis",
+          "recall_at_k": 0.5,
+          "mrr": 1.0,
+          "ndcg": 0.8869,
+          "context_precision": 0.6,
+          "context_recall": 0.5,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.4783,
+          "total_latency_ms": 21731,
+          "cache_hit": false,
+          "retrieved_pages": [
+            55,
+            62,
+            53,
+            50,
+            74
+          ]
+        },
+        {
+          "item_id": "EVAL-04",
+          "query": "What are the essential characteristics of cloud computing according to NIST?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.5,
+          "mrr": 0.5,
+          "ndcg": 0.6309,
+          "context_precision": 0.2,
+          "context_recall": 0.5,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.7222,
+          "total_latency_ms": 8385,
+          "cache_hit": false,
+          "retrieved_pages": [
+            5,
+            13,
+            5,
+            9,
+            11
+          ]
+        },
+        {
+          "item_id": "EVAL-05",
+          "query": "What are the primary disadvantages and security concerns of cloud storage?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.5,
+          "mrr": 0.2,
+          "ndcg": 0.3869,
+          "context_precision": 0.2,
+          "context_recall": 0.3333,
+          "faithfulness": 0.7,
+          "answer_relevance": 0.4211,
+          "total_latency_ms": 31422,
+          "cache_hit": false,
+          "retrieved_pages": [
+            264,
+            264,
+            264,
+            261,
+            27
+          ]
+        },
+        {
+          "item_id": "EVAL-06",
+          "query": "How does a Public Cloud differ from a Private Cloud regarding accessibility and infrastructure ownership?",
+          "category": "comparative_analysis",
+          "recall_at_k": 0.6667,
+          "mrr": 1.0,
+          "ndcg": 0.9651,
+          "context_precision": 1.0,
+          "context_recall": 0.6667,
+          "faithfulness": 0.9091,
+          "answer_relevance": 0.55,
+          "total_latency_ms": 26039,
+          "cache_hit": false,
+          "retrieved_pages": [
+            33,
+            16,
+            32,
+            32,
+            32
+          ]
+        },
+        {
+          "item_id": "EVAL-07",
+          "query": "What are its primary benefits for software developers?",
+          "category": "conversational_followup",
+          "recall_at_k": 0.0,
+          "mrr": 0.0,
+          "ndcg": 0.0,
+          "context_precision": 0.0,
+          "context_recall": 0.2857,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.3478,
+          "total_latency_ms": 16840,
+          "cache_hit": false,
+          "retrieved_pages": [
+            180,
+            176,
+            268,
+            268,
+            268
+          ]
+        },
+        {
+          "item_id": "EVAL-08",
+          "query": "How does virtualization differ from traditional dual-core computing and what are its trade-offs?",
+          "category": "conversational_followup",
+          "recall_at_k": 0.5,
+          "mrr": 1.0,
+          "ndcg": 1.0,
+          "context_precision": 0.6,
+          "context_recall": 0.4286,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.2632,
+          "total_latency_ms": 14572,
+          "cache_hit": false,
+          "retrieved_pages": [
+            238,
+            221,
+            234,
+            23,
+            23
+          ]
+        }
+      ]
+    },
+    "conversational": {
+      "pipeline_name": "Phase 8 Conversational RAG",
+      "retrieval_mode": "conversational",
+      "total_queries": 8,
+      "retrieval_metrics": {
+        "mean_recall_at_k": 0.6131,
+        "mean_mrr": 0.7292,
+        "mean_ndcg": 0.7835
+      },
+      "context_metrics": {
+        "mean_context_precision": 0.6,
+        "mean_context_recall": 0.5238
+      },
+      "answer_metrics": {
+        "mean_faithfulness": 0.7697,
+        "mean_answer_relevance": 0.5552
+      },
+      "latency_metrics": {
+        "mean_latency_ms": 32326.6,
+        "p50_latency_ms": 29549.5,
+        "p95_latency_ms": 42273.7,
+        "mean_retrieval_latency_ms": 254.8,
+        "mean_generation_latency_ms": 27794.6
+      },
+      "efficiency_metrics": {
+        "cache_hit_rate": 0.0,
+        "total_inferences": 16,
+        "total_tokens": 12643
+      },
+      "item_results": [
+        {
+          "item_id": "EVAL-01",
+          "query": "Who benefits from cloud computing according to the notes, specifically regarding collaborators?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.6667,
+          "mrr": 1.0,
+          "ndcg": 0.9399,
+          "context_precision": 0.8,
+          "context_recall": 0.6667,
+          "faithfulness": 0.8667,
+          "answer_relevance": 0.5789,
+          "total_latency_ms": 40024,
+          "cache_hit": false,
+          "retrieved_pages": [
+            10,
+            181,
+            7,
+            7,
+            7
+          ]
+        },
+        {
+          "item_id": "EVAL-02",
+          "query": "What is a Community Cloud and who does it serve?",
+          "category": "concept_explanation",
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "ndcg": 0.9729,
+          "context_precision": 0.6,
+          "context_recall": 1.0,
+          "faithfulness": 0.6364,
+          "answer_relevance": 0.8333,
+          "total_latency_ms": 26124,
+          "cache_hit": false,
+          "retrieved_pages": [
+            35,
+            40,
+            36,
+            121,
+            7
+          ]
+        },
+        {
+          "item_id": "EVAL-03",
+          "query": "Compare Infrastructure as a Service (IaaS) and Software as a Service (SaaS) regarding consumer management responsibility.",
+          "category": "comparative_analysis",
+          "recall_at_k": 0.5,
+          "mrr": 0.3333,
+          "ndcg": 0.5378,
+          "context_precision": 0.4,
+          "context_recall": 0.5,
+          "faithfulness": 0.6667,
+          "answer_relevance": 0.6522,
+          "total_latency_ms": 29382,
+          "cache_hit": false,
+          "retrieved_pages": [
+            58,
+            53,
+            55,
+            62,
+            184
+          ]
+        },
+        {
+          "item_id": "EVAL-04",
+          "query": "What are the essential characteristics of cloud computing according to NIST?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.5,
+          "mrr": 0.25,
+          "ndcg": 0.4307,
+          "context_precision": 0.2,
+          "context_recall": 0.1667,
+          "faithfulness": 0.8947,
+          "answer_relevance": 0.5556,
+          "total_latency_ms": 37386,
+          "cache_hit": false,
+          "retrieved_pages": [
+            261,
+            50,
+            42,
+            20,
+            41
+          ]
+        },
+        {
+          "item_id": "EVAL-05",
+          "query": "What are the primary disadvantages and security concerns of cloud storage?",
+          "category": "fact_lookup",
+          "recall_at_k": 0.5,
+          "mrr": 1.0,
+          "ndcg": 1.0,
+          "context_precision": 0.6,
+          "context_recall": 0.3333,
+          "faithfulness": 0.6429,
+          "answer_relevance": 0.3684,
+          "total_latency_ms": 29717,
+          "cache_hit": false,
+          "retrieved_pages": [
+            14,
+            14,
+            14,
+            264,
+            264
+          ]
+        },
+        {
+          "item_id": "EVAL-06",
+          "query": "How does a Public Cloud differ from a Private Cloud regarding accessibility and infrastructure ownership?",
+          "category": "comparative_analysis",
+          "recall_at_k": 0.6667,
+          "mrr": 1.0,
+          "ndcg": 0.9651,
+          "context_precision": 1.0,
+          "context_recall": 0.6667,
+          "faithfulness": 0.7,
+          "answer_relevance": 0.65,
+          "total_latency_ms": 26900,
+          "cache_hit": false,
+          "retrieved_pages": [
+            33,
+            16,
+            32,
+            32,
+            32
+          ]
+        },
+        {
+          "item_id": "EVAL-07",
+          "query": "What are its primary benefits for software developers?",
+          "category": "conversational_followup",
+          "recall_at_k": 0.5714,
+          "mrr": 1.0,
+          "ndcg": 0.9914,
+          "context_precision": 1.0,
+          "context_recall": 0.5714,
+          "faithfulness": 0.75,
+          "answer_relevance": 0.4348,
+          "total_latency_ms": 43485,
+          "cache_hit": false,
+          "retrieved_pages": [
+            55,
+            54,
+            54,
+            57,
+            59
+          ]
+        },
+        {
+          "item_id": "EVAL-08",
+          "query": "How does virtualization differ from traditional dual-core computing and what are its trade-offs?",
+          "category": "conversational_followup",
+          "recall_at_k": 0.5,
+          "mrr": 0.25,
+          "ndcg": 0.4307,
+          "context_precision": 0.2,
+          "context_recall": 0.2857,
+          "faithfulness": 1.0,
+          "answer_relevance": 0.3684,
+          "total_latency_ms": 25595,
+          "cache_hit": false,
+          "retrieved_pages": [
+            219,
+            223,
+            312,
+            47,
+            236
+          ]
+        }
+      ]
+    }
+  },
+  "cache_benchmark": {
+    "warm_cache_queries_tested": 3,
+    "warm_cache_hit_rate": 1.0,
+    "warm_cache_mean_latency_ms": 62.3,
+    "cold_cache_mean_latency_ms": 32326.6,
+    "speedup_factor": 518.61
+  },
+  "comparison_summary": {
+    "recall_at_5": {
+      "baseline": 0.6458,
+      "advanced": 0.5417,
+      "conversational": 0.6131,
+      "delta_advanced_vs_baseline": -0.1042,
+      "delta_conversational_vs_advanced": 0.0714
+    },
+    "mrr": {
+      "baseline": 0.9167,
+      "advanced": 0.7125,
+      "conversational": 0.7292,
+      "delta_advanced_vs_baseline": -0.2042
+    },
+    "ndcg": {
+      "baseline": 0.9046,
+      "advanced": 0.7337,
+      "conversational": 0.7835,
+      "delta_advanced_vs_baseline": -0.1709
+    },
+    "context_precision": {
+      "baseline": 0.575,
+      "advanced": 0.475,
+      "conversational": 0.6
+    },
+    "context_recall": {
+      "baseline": 0.6101,
+      "advanced": 0.5476,
+      "conversational": 0.5238
+    },
+    "faithfulness": {
+      "baseline": 0.6758,
+      "advanced": 0.9011,
+      "conversational": 0.7697
+    },
+    "answer_relevance": {
+      "baseline": 0.5918,
+      "advanced": 0.532,
+      "conversational": 0.5552
+    },
+    "latency_p50_ms": {
+      "baseline": 27129.0,
+      "advanced": 16565.5,
+      "conversational": 29549.5
+    },
+    "latency_p95_ms": {
+      "baseline": 38033.3,
+      "advanced": 29537.9,
+      "conversational": 42273.7
+    }
+  }
+}

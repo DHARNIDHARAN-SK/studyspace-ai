@@ -6,7 +6,7 @@ Read `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` completely before proposing changes.
 Act as the architecture-aware coding agent for StudySpace AI. The master architecture file defines the product scope, UX, architecture boundaries, data model, RAG behaviour, supported formats, security constraints, evaluation requirements, and deployment boundaries.
 
 ## Current status & instruction
-Phases 1 through 8.5 are COMPLETED, TESTED, and COMMITTED:
+Phases 1 through 9 are COMPLETED, TESTED, and COMMITTED:
 - Phase 1: Foundation & Monorepo Setup
 - Phase 2: Authentication & Multi-Tenant Workspaces
 - Phase 3: Database, Storage & Data Model Hardening
@@ -16,8 +16,9 @@ Phases 1 through 8.5 are COMPLETED, TESTED, and COMMITTED:
 - Phase 7: Advanced Hybrid RAG (Dense Vector + Lexical tsvector + Reciprocal Rank Fusion + Deterministic Local Passage Reranking)
 - Phase 8: Conversational RAG + Multi-Query Expansion + Query Decomposition + Redis Semantic Cache
 - Phase 8.5: Authentication UI & Flow Hardening (Supabase Email/Password, Google & GitHub OAuth triggers, Password Recovery, Route Guards, Central Error Formatting, 20/20 frontend vitest tests)
+- Phase 9: RAG Evaluation & Comparative Benchmarking (Recall@K, MRR, nDCG, Context Precision, Faithfulness, Latency percentiles, controlled testing on DECAP470_CLOUD_COMPUTING.pdf)
 
-**Do NOT start Phase 9 or any future phases without explicit instruction.** Await the user's prompt before taking any action on Phase 9.
+**Do NOT start Phase 10 or any future phases without explicit instruction.** Await the user's prompt before taking any action on Phase 10.
 
 ## Requirements you must preserve
 - Education-focused document intelligence SaaS named StudySpace AI (working name).

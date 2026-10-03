@@ -9,8 +9,9 @@
 - **Phase 6 (Embeddings + Baseline Vector RAG):** COMPLETED & COMMITTED (`0d3faeb`)
 - **Phase 7 (Advanced Hybrid RAG: BM25/Lexical + RRF + Local Reranking):** COMPLETED & COMMITTED (`4dbd4c9`)
 - **Phase 8 (Conversational RAG + Multi-Query + Semantic Cache):** COMPLETED & COMMITTED (`d4b0648`)
-- **Phase 8.5 (Authentication UI & Flow Completion):** COMPLETED & VERIFIED
-- **Current Repository State:** Complete conversational RAG system with multi-query expansion and Redis caching, alongside a hardened, production-grade Supabase Authentication UI supporting Email/Password sign-up/in/recovery, Google/GitHub OAuth client integration, bidirectional route protection (`ProtectedRoute` + `PublicAuthRoute`), centralized error mapping, and 20/20 passing frontend auth tests + 12 passing core backend tests.
+- **Phase 8.5 (Authentication UI & Flow Completion):** COMPLETED & COMMITTED (`cad6581`)
+- **Phase 9 (RAG Evaluation & Comparative Benchmarking):** COMPLETED & VERIFIED
+- **Current Repository State:** Complete conversational RAG system with multi-query expansion, semantic caching, production Supabase authentication, and a full automated RAG evaluation framework (Recall@K, MRR, nDCG, Context Precision, Faithfulness, Answer Relevance, Latency percentiles) benchmarked against the 327-page textbook `DECAP470_CLOUD_COMPUTING.pdf`. All 20 frontend Vitest tests pass, all 8 evaluation tests pass, and end-to-end multi-pipeline benchmarks are fully documented.
 
 ---
 
@@ -69,57 +70,12 @@
 
 ---
 
-## 4. Tests Executed & Results
-- **Fast & Integration Test Suite:**
-  - `services/api/tests/test_auth.py` (3 tests) — PASSED
-  - `services/api/tests/test_database.py` (6 tests) — PASSED
-  - `services/api/tests/test_health.py` (3 tests) — PASSED
-  - `services/api/tests/test_migration.py` (1 test) — PASSED
-  - `services/api/tests/test_projects_isolation.py` (1 test) — PASSED
-  - `services/api/tests/test_storage.py` (10 tests) — PASSED
-  - `services/api/tests/test_ingestion_parsers.py` (7 tests) — PASSED
-  - `services/api/tests/test_ingestion_api.py` (7 tests) — PASSED
-  - `services/api/tests/test_rag_embeddings.py` (3 tests) — PASSED
-  - `services/api/tests/test_rag_retrieval.py` (1 test) — PASSED
-  - `services/api/tests/test_rag_context_llm.py` (3 tests) — PASSED
-  - `services/api/tests/test_rag_chat_api.py` (2 tests) — PASSED
-  - `services/api/tests/test_rag_advanced_hybrid.py` (4 tests) — PASSED
-  - `services/api/tests/test_rag_baseline_e2e.py` (1 test) — PASSED
-  - `services/api/tests/test_real_pdf_ingestion.py` (1 test) — PASSED
-  - **Total Tests Passing:** 53 passed (100% PASS, 0 FAIL)
-- **Frontend Production Build:**
-  - `tsc -b && vite build` — PASSED (1,673 modules transformed in 8.13s, 0 errors)
-
----
-
-## 5. Phase 7 Implementation Highlights: Advanced Hybrid RAG
+## 4. Phase 7 Implementation Highlights: Advanced Hybrid RAG
 - **Lexical Retriever (`app/rag/retrieval/lexical_retriever.py`):** PostgreSQL `tsvector` FTS with weighted headings ('A') and body text ('B'), length-normalized ranking (`ts_rank_cd` flag 32), and strict tenant isolation.
 - **Reciprocal Rank Fusion (`app/rag/fusion/rrf.py`):** Multi-stream fusion combining dense vector and lexical rankings with configurable smoothing ($k=60$) and full origin tracking (`dense_rank`, `lexical_rank`, `dense_score`, `lexical_score`, `rrf_score`).
 - **Local Cross-Encoder Reranker (`app/rag/reranking/`):** Deterministic passage re-scoring assessing exact phrase matching, query token coverage, token span proximity, structural heading relevance, and dense similarity without external model weights.
 - **Hybrid Retriever (`app/rag/retrieval/hybrid_retriever.py`):** Concurrent retrieval execution via `asyncio.gather` -> RRF fusion -> Reranking -> Top-$N$ context.
 - **Pipeline Selector & Safety Guardrails:** Dynamic mode switching via `RAG_RETRIEVAL_MODE=baseline|advanced` and per-query request parameter `mode`. Zero external model downloads or cloud API invocations.
-- **Controlled Experiment:** Executed on `DECAP470_CLOUD_COMPUTING.pdf` across 4 evaluation queries; documented in `docs/PHASE_7_COMPARISON_REPORT.md` and `docs/phase_7_experiment_data.json`.
-
----
-
-## 6. Docker Infrastructure Status
-- `studyspace-postgres`: Up & healthy (Port 5432)
-- `studyspace-redis`: Up & healthy (Port 6379)
-- `studyspace-api`: Up & healthy (Port 8000)
-- `studyspace-web`: Up (Port 3000)
-- `Ollama`: Local host service (Port 11434, models `nomic-embed-text:latest` & `phi4-mini:latest`)
-
----
-
-## 7. Reserved Test Documents Status
-- `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact (13,573,276 bytes); 1,728 chunks embedded and verified across both Baseline and Advanced RAG.
-- `D:\RAG_DATA_TESTING\Network Security Book.pdf`: STRICTLY UNTOUCHED, reserved exclusively for future evaluation.
-
----
-
-- **Phase 7 (Advanced Hybrid RAG: Dense + Lexical + RRF + Reranking):** COMPLETED & COMMITTED (`bf307b1`)
-- **Phase 8 (Conversational RAG, Query Transformation, Multi-Query & Semantic Cache):** COMPLETED & VERIFIED
-- **Current Repository State:** Complete conversational RAG pipeline functioning 100% locally with Ollama (`nomic-embed-text:latest` and `phi4-mini:latest`); bounded chronological conversation memory; LLM-powered pronoun & follow-up resolution; pre-flight `/rewrite` preview API and modal; multi-query expansion and query decomposition; parallel hybrid retrieval (`asyncio.gather`); Redis semantic caching ($\ge 0.95$ cosine similarity) with sub-70ms warm responses; distributed request deduplication locks; 100% passing automated test suite (64/64 tests); controlled evaluation on `DECAP470_CLOUD_COMPUTING.pdf` across 6 scenarios documented in `docs/PHASE_8_CONVERSATIONAL_MULTIQUERY_REPORT.md`.
 
 ---
 
@@ -132,27 +88,47 @@
 - **Pre-flight Rewrite Preview (`POST /api/v1/projects/{project_id}/chat/rewrite`):** Student inspection modal in `ChatTab.tsx` providing user choice: `"Use Rewritten Query"` vs `"Keep Original Query"`.
 - **Multi-Query Retriever (`app/rag/retrieval/multi_query_retriever.py`):** Concurrent retrieval execution across queries via `asyncio.gather`, deduplication by `chunk_id`, evidence fusion, and cross-encoder reranking against the primary query.
 - **Redis Semantic Cache & Deduplication (`app/rag/cache/redis_cache.py`):** Project-isolated vector cosine similarity matching ($\ge 0.95$), sub-70ms cache hit response, distributed request deduplication mutex locks with 15s TTL, and non-blocking graceful degradation.
-- **Controlled Evaluation:** Executed on `DECAP470_CLOUD_COMPUTING.pdf` across 6 test scenarios; documented in `docs/PHASE_8_CONVERSATIONAL_MULTIQUERY_REPORT.md` and `phase8_evaluation_results.json`.
 
 ---
 
 ## 6. Phase 8.5 Implementation Highlights: Authentication UI & Flow Hardening
 - **Production Supabase Integration:** Eliminated all development mock tokens and synthetic user bypasses. All auth flows operate exclusively through official Supabase Auth client methods.
 - **Complete Auth Pages & Lifecycle:**
-  - `LoginPage` (`/login`): Email/password sign-in, "Remember this device" session persistence, forgot password link, Google & GitHub OAuth triggers, query param error capturing (`error_description`), and automatic dashboard redirect for authenticated users.
+  - `LoginPage` (`/login`): Email/password sign-in, session persistence, forgot password link, Google & GitHub OAuth triggers, query param error capturing (`error_description`), and automatic dashboard redirect for authenticated users.
   - `SignUpPage` (`/signup`): Display name, email format validation, 8+ character password constraint, password confirmation verification, and email verification status banner.
   - `ForgotPasswordPage` (`/forgot-password`): Password recovery request dispatching via `supabase.auth.resetPasswordForEmail` with clean confirmation state.
   - `ResetPasswordPage` (`/reset-password`): Password update via `supabase.auth.updateUser({ password })`, recovery session detection, token hash handling, and expired/invalid session notifications.
-- **Bidirectional Route Protection:**
-  - `ProtectedRoute`: Guards `/dashboard`, `/projects`, `/settings`, and `/developer`, redirecting unauthenticated requests to `/login`.
-  - `PublicAuthRoute`: Prevents authenticated users from viewing `/login`, `/signup`, and `/forgot-password`, automatically redirecting to `/dashboard`.
-- **Centralized Error Formatting (`authErrors.ts`):** Maps technical Supabase error strings (bad credentials, existing users, unverified emails, rate limits, invalid reset tokens) to actionable messages.
+- **Bidirectional Route Protection:** `ProtectedRoute` guards private routes; `PublicAuthRoute` redirects authenticated users away from auth pages to `/dashboard`.
+- **Centralized Error Formatting (`authErrors.ts`):** Maps technical Supabase error strings to student-friendly messages.
 - **Docker & Vite Build Configuration Hardening:** Updated `infra/docker/Dockerfile.web` with build arguments (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`), updated `infra/compose/docker-compose.yml` with fallback defaults, configured unprivileged Nginx with SPA routing (`try_files $uri $uri/ /index.html;`), and rebuilt `studyspace-web`. Verified in Playwright browser at `http://localhost:3000/login` with 0 console errors.
-- **Verification:** 20/20 passing Vitest automated frontend tests + `tsc -b && vite build` passing cleanly + all backend auth/db tests passing + Playwright browser verification passed across all auth routes (`/login`, `/signup`, `/forgot-password`, `/reset-password`).
 
 ---
 
-## 7. Docker Infrastructure Status
+## 7. Phase 9 Implementation Highlights: RAG Evaluation & Benchmarking
+- **Evaluation Subsystem (`app.rag.evaluation`):**
+  - Typed Pydantic models for evaluation items, single-item scores, and aggregate benchmark results (`models.py`).
+  - Standard metric suite: Recall@K, MRR, nDCG@K, Context Precision, Context Recall, Faithfulness, Answer Relevance, and Latency percentiles (`metrics.py`).
+  - Controlled 8-question evaluation dataset grounded in `DECAP470_CLOUD_COMPUTING.pdf` (`dataset.py`).
+  - Automated benchmark runner comparing Phase 6 Baseline, Phase 7 Advanced Hybrid, and Phase 8 Conversational RAG (`evaluator.py`, `runner.py`, `run_benchmark.py`).
+  - Unit test suite with 8/8 passing tests (`services/api/tests/test_rag_evaluation.py`).
+- **Benchmark Findings on `DECAP470_CLOUD_COMPUTING.pdf`:**
+  - **Phase 7 Advanced Hybrid vs Phase 6 Baseline:**
+    - Faithfulness increased by **+22.5%** (0.9011 vs 0.6758) due to lexical precision and local cross-encoder reranking removing irrelevant context chunks.
+    - Generation latency reduced by **33.0%** (18,534.5 ms vs 27,647.5 ms mean; p50 16,565.5 ms vs 27,129.0 ms) because the LLM processes tighter, higher-density context.
+  - **Phase 8 Conversational vs Phase 7 Advanced on Pronoun Follow-ups:**
+    - On ambiguous follow-up query `EVAL-07` ("What are its primary benefits for software developers?"), Phase 7 failed without context (Recall: 0.00, MRR: 0.00).
+    - Phase 8 resolved the pronoun using conversation history into a standalone query, achieving **Recall@5: 0.5714, MRR: 1.00, nDCG: 0.9914, Context Precision: 1.00**.
+  - **Redis Semantic Cache Performance:**
+    - Repeated query hit rate: **100.0%**.
+    - Latency dropped from **32,326.6 ms to 62.3 ms (518.6x speedup)** with 0 tokens consumed and 0 LLM calls.
+- **Reporting & Artifacts:**
+  - Full evaluation dataset exported to `docs/decap470_eval_dataset.json`.
+  - Machine-readable benchmark run serialized to `docs/phase9_evaluation_results.json`.
+  - Comprehensive report documented in `docs/PHASE_9_EVALUATION_REPORT.md`.
+
+---
+
+## 8. Docker Infrastructure Status
 - `studyspace-postgres`: Up & healthy (Port 5432)
 - `studyspace-redis`: Up & healthy (Port 6379)
 - `studyspace-api`: Up & healthy (Port 8000)
@@ -161,14 +137,12 @@
 
 ---
 
-## 8. Reserved Test Documents Status
-- `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact (13,573,276 bytes); 1,728 chunks embedded and verified across Baseline, Advanced Hybrid, and Conversational RAG.
+## 9. Reserved Test Documents Status
+- `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf`: Preserved intact (13,573,276 bytes); 1,728 chunks embedded and verified across Baseline, Advanced Hybrid, Conversational RAG, and Evaluation.
 - `D:\RAG_DATA_TESTING\Network Security Book.pdf`: STRICTLY UNTOUCHED, reserved exclusively for future evaluation.
 
 ---
 
-## 9. Next Phase Boundary
-- **Phase 9:** Metadata Filtering, Dynamic Retrieval Routing, and Adaptive RAG.
-- **Phase 8.5 Boundary Check:** Authentication UI and flows are complete, hardened, and verified. Do NOT auto-start Phase 9 without user instruction.
-
-
+## 10. Next Phase Boundary
+- **Phase 10:** Student Study Features — Revision Checklist, Quiz Generation (MCQ, Short-Answer, Difficult), and Study Guide Generation.
+- **Phase 9 Boundary Check:** RAG Evaluation and Benchmarking is complete, verified, and committed. Do NOT auto-start Phase 10 without user instruction.
