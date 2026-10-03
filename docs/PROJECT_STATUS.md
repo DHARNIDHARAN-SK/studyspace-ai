@@ -147,7 +147,8 @@
   - `ProtectedRoute`: Guards `/dashboard`, `/projects`, `/settings`, and `/developer`, redirecting unauthenticated requests to `/login`.
   - `PublicAuthRoute`: Prevents authenticated users from viewing `/login`, `/signup`, and `/forgot-password`, automatically redirecting to `/dashboard`.
 - **Centralized Error Formatting (`authErrors.ts`):** Maps technical Supabase error strings (bad credentials, existing users, unverified emails, rate limits, invalid reset tokens) to actionable messages.
-- **Verification:** 20/20 passing Vitest automated frontend tests + `tsc -b && vite build` passing cleanly + all backend auth/db tests passing.
+- **Docker & Vite Build Configuration Hardening:** Updated `infra/docker/Dockerfile.web` with build arguments (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`), updated `infra/compose/docker-compose.yml` with fallback defaults, configured unprivileged Nginx with SPA routing (`try_files $uri $uri/ /index.html;`), and rebuilt `studyspace-web`. Verified in Playwright browser at `http://localhost:3000/login` with 0 console errors.
+- **Verification:** 20/20 passing Vitest automated frontend tests + `tsc -b && vite build` passing cleanly + all backend auth/db tests passing + Playwright browser verification passed across all auth routes (`/login`, `/signup`, `/forgot-password`, `/reset-password`).
 
 ---
 

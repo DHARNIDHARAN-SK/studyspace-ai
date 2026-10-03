@@ -86,6 +86,12 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-${SUPABASE_URL:-https://mexqshfhitgleybpdhqo.supabase.co}}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-sb_publishable_oTKvk7BHBRZU3S0Dzp4dGw_8u5ii-Ka}}
+        SUPABASE_URL: ${SUPABASE_URL:-https://mexqshfhitgleybpdhqo.supabase.co}
+        SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-sb_publishable_oTKvk7BHBRZU3S0Dzp4dGw_8u5ii-Ka}
     container_name: studyspace-web
     restart: unless-stopped
     depends_on:
