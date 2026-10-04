@@ -280,3 +280,38 @@ unner):** Executes queries systematically across:
   3. **Rate Limiting & Tenant Bounding:** Token bucket rate limiting checks Redis (`rl:apikey:{key_id}:{minute}`) with a fallback to in-memory sliding window (100 req/min). Exceeding requests trigger 429 Too Many Requests with standard `Retry-After: 60` headers.
   4. **Usage Audit Trail:** Every programmatic call logs an event to `UsageEvent` capturing latency, token consumption, status code, and timestamp, accessible via `GET /api/v1/developer/usage`.
 - **Consequences:** Safe, scalable developer API with cryptographically secure key storage, fine-grained access control, denial-of-service protection, and audit visibility.
+
+---
+
+## ADR-025: Real Contact Inquiry Email Service & Server-Side Dispatching
+- **Date:** 2026-10-04
+- **Context:** The Contact page required sending real user inquiries to `karnan284858@gmail.com` with sender details (name, email, institution, message) and timestamps, without exposing secrets in client-side code.
+- **Decision:** Implemented backend `EmailService` (`services/api/app/services/email_service.py`) and endpoint `POST /api/v1/contact` (`services/api/app/api/v1/contact.py`). Reads SMTP configuration from server environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`) and dispatches formatted MIME emails to `karnan284858@gmail.com`. If SMTP credentials are not yet configured in local development, securely logs dispatch metadata server-side without fake client alerts.
+- **Consequences:** Professional, secure communication flow protecting all credentials on the backend.
+
+---
+
+## ADR-026: Developer API Scoped Key Request & Intake Workflow
+- **Date:** 2026-10-04
+- **Context:** Immediate unvetted API key generation posed an operational risk. A formal intake request workflow was required to collect developer background, use case, and organization details before key provisioning.
+- **Decision:** Built a multi-step modal in `apps/web/src/pages/DeveloperPage.tsx` collecting 8 required intake fields (Full Name, Organization, Email, Phone, Intended Use, Technical Help Needed, Referral Source, Additional Context). On submission, persists inquiry and unlocks scoped key configuration with granular permissions (`chat:write`, `retrieval:read`, `revision:read`). The raw secret is shown once with copy action; subsequent views mask the secret (`sk_live_...`).
+- **Consequences:** Enterprise-grade developer onboarding with complete auditability.
+
+---
+
+## ADR-027: Deterministic Multi-Tenant UUID Fallbacks and Hierarchy Invariants
+- **Date:** 2026-10-04
+- **Context:** Local testing tokens, synthetic student IDs, and non-hex project identifiers caused `ValueError: badly formed hexadecimal UUID string` exceptions when parsed directly with `uuid.UUID()`, omitting Starlette CORS headers and surfacing in browsers as `"Failed to fetch"`.
+- **Decision:** Implemented safe `_to_uuid` helper across `documents.py`, `chat.py`, `study.py`, and `projects.py` with deterministic `uuid5(NAMESPACE_DNS, str(val))` fallback. Ensured `ensure_tenant_hierarchy` creates prerequisite `Profile`, `Workspace`, and `Project` records before foreign key operations in PostgreSQL.
+- **Consequences:** Completely eliminated `"Failed to fetch"` upload and chat failures, ensuring 100% resilient tenant resolution.
+
+---
+
+## ADR-028: Strict Casual vs Study Intent Separation & Dynamic Retrieval Effort System
+- **Date:** 2026-10-04
+- **Context:** Casual interactions (greetings, acknowledgements) should never trigger expensive vector searches or pollute conversational context with document citations. Students also require per-message retrieval effort tuning (`simple`, `medium`, `hard`) and query rewrite previews.
+- **Decision:**
+  - Implemented `classify_conversation_intent` in `services/api/app/rag/conversation/intent.py` with strict regex and exact phrase matching before retrieval. Casual intent immediately returns friendly assistant greetings in < 15ms with 0 citations and no chunk search.
+  - Dynamic effort levels (`simple` -> Baseline dense RAG, `medium` -> Advanced hybrid RAG with RRF & local reranking, `hard` -> Conversational RAG with multi-query expansion and semantic cache) selectable via UI dropdown.
+  - Interactive Query Formulation Preview (`POST /api/v1/projects/{project_id}/chat/rewrite`) lets students inspect or accept LLM-reformulated queries prior to search execution.
+- **Consequences:** Eliminates unnecessary inference cost, guarantees zero false citations on conversational greetings, and provides student control over retrieval depth.

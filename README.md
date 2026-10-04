@@ -70,10 +70,14 @@ To launch all StudySpace AI services with automated Ollama model verification, D
 StudySpace AI provides a secure programmatic API authenticated via API Keys (`sk_live_...`):
 
 - **Key Management (Web Dashboard):**
+  - Developer intake workflow gates key generation (collects name, organization, contact, intended use, referral, technical needs)
   - `POST /api/v1/developer/keys` — Generate scoped API key (hashed at rest with SHA-256)
   - `GET /api/v1/developer/keys` — List workspace API keys (secret masked)
   - `DELETE /api/v1/developer/keys/{id}` — Revoke API key immediately
   - `GET /api/v1/developer/usage` — View usage event audits and token consumption
+- **Contact & Developer Profile:**
+  - Lead Developer: Dharanidharan (Phone: 9080284858, Email: karnan284858@gmail.com, GitHub: DHARNIDHARAN-SK)
+  - Contact Form (`/contact`): Real backend email dispatch to `karnan284858@gmail.com` via `POST /api/v1/contact`
 - **Programmatic Endpoints (`X-API-Key: sk_live_...` or `Authorization: Bearer sk_live_...`):**
   - `POST /api/v1/dev/chat` — Programmatic grounded RAG chat (Scope: `chat:write`)
   - `POST /api/v1/dev/retrieve` — Hybrid candidate chunk retrieval (Scope: `retrieval:read`)

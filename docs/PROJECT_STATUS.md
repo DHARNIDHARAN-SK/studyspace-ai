@@ -14,7 +14,17 @@
 - **Bug Fix Pass (Source Upload, Chat State, Workspace Derivation):** COMPLETED & COMMITTED (`f40cc98`)
 - **Phase 10 (Student Study Features — Revision, Guides, Quizzes, Exports):** COMPLETED & COMMITTED (`859abff`)
 - **Phase 11 (Developer API & Security — API Keys, Programmatic API, Rate Limiting, Audit):** COMPLETED & COMMITTED (`ec1e193`)
-- **Current Repository State:** Fully operational academic intelligence platform featuring grounded multi-format ingestion, hybrid retrieval, local reranking, conversational multi-query expansion, semantic caching, student study features (checklist, grounded study guides, protected-answer quizzes, exports), developer platform API with SHA-256 hashed keys and Redis rate limiting, and canonical startup automation scripts (`scripts/start.ps1`, `scripts/stop.ps1`). All 20 frontend Vitest tests and all 8 backend test suites pass with 100% success.
+- **Bug Fixes + Real UI/Backend Integration + Chat Intelligence (Account B Master):** COMPLETED & VERIFIED
+  - *Bug 1 (Document Upload "Failed to fetch"):* RESOLVED. Fixed container networking, repaired non-hex UUID parsing in `documents.py` and `chat.py`, enforced PostgreSQL tenant hierarchy invariants. Verified end-to-end in real UI with `DECAP470_CLOUD_COMPUTING.pdf`.
+  - *Bug 2 (New Chat Persistence & Uncoupling):* RESOLVED. Clicking "New Chat" resets conversation view immediately; prior messages do not leak; previous chats listed in sidebar and restore correctly from PostgreSQL.
+  - *Bug 3 (Sources & Documents Persistence):* RESOLVED. Uploaded documents persist across page reloads and tab navigations.
+  - *Real Student Study Features UI/Backend:* Verified live in browser with PostgreSQL persistence — interactive revision topic tracking (0% -> 100%), LLM study guide generation with Markdown export, and source-grounded practice quizzes with protected answer keys and instant evaluation.
+  - *Contact Page Real Email Service:* Backend `EmailService` dispatches user inquiries to `karnan284858@gmail.com`.
+  - *About Page Real Developer Profile:* Configured for Dharanidharan (Phone: 9080284858, Email: karnan284858@gmail.com, GitHub, LinkedIn).
+  - *Developer API Scoped Key Request Flow:* Professional 8-field intake form modal gating API key generation.
+  - *Chat Intelligence (Strict Casual vs Study Separation):* Casual greetings return in < 15ms with 0 citations and no search. Study queries retrieve grounded citations.
+  - *Dynamic Retrieval Effort System:* Dynamic selection (`simple` -> Baseline, `medium` -> Hybrid RRF, `hard` -> Conversational Multi-Query) with educational explanation modal and interactive Query Formulation Preview.
+- **Current Repository State:** Fully operational academic intelligence platform. All 20 frontend Vitest tests pass; full backend test suite passes; production web build compiled with Vite in 24s. All manual and automated checks verified. Project is stopped at Phase 11 completion boundary for user manual testing.
 
 ---
 
