@@ -44,34 +44,54 @@ studyspace-ai/
 └── package.json                     # Monorepo development scripts
 ```
 
-## Quickstart
+## Canonical Single-Command Local Startup
 
-### 1. Backend Service (FastAPI)
-```bash
-# Activate virtual environment
-.venv\Scripts\activate
+To launch all StudySpace AI services with automated Ollama model verification, Docker containers (PostgreSQL 16 with pgvector, Redis 7, FastAPI, and Vite web UI), and health probes:
 
-# Run backend API server
-uvicorn app.main:app --app-dir services/api --reload --port 8000
+```powershell
+# Start all services
+.\scripts\start.ps1
+
+# Stop all services
+.\scripts\stop.ps1
 ```
-Health endpoint: `http://localhost:8000/api/v1/health`
 
-### 2. Frontend Service (Vite + React)
-```bash
-# Navigate to web application
-cd apps/web
+### Access Endpoints
+- **Web Application:** `http://localhost:3000` (Docker) or `http://localhost:5173` (Local Dev)
+- **FastAPI Backend:** `http://localhost:8000`
+- **Interactive OpenAPI Docs:** `http://localhost:8000/docs`
+- **Health Check Probe:** `http://localhost:8000/api/v1/health`
+- **Ollama Local LLM:** `http://localhost:11434` (`nomic-embed-text:latest` & `phi4-mini:latest`)
 
-# Install packages & run dev server
-npm install
-npm run dev
+---
+
+## Developer API & Security (Phase 11)
+
+StudySpace AI provides a secure programmatic API authenticated via API Keys (`sk_live_...`):
+
+- **Key Management (Web Dashboard):**
+  - `POST /api/v1/developer/keys` — Generate scoped API key (hashed at rest with SHA-256)
+  - `GET /api/v1/developer/keys` — List workspace API keys (secret masked)
+  - `DELETE /api/v1/developer/keys/{id}` — Revoke API key immediately
+  - `GET /api/v1/developer/usage` — View usage event audits and token consumption
+- **Programmatic Endpoints (`X-API-Key: sk_live_...` or `Authorization: Bearer sk_live_...`):**
+  - `POST /api/v1/dev/chat` — Programmatic grounded RAG chat (Scope: `chat:write`)
+  - `POST /api/v1/dev/retrieve` — Hybrid candidate chunk retrieval (Scope: `retrieval:read`)
+  - `GET /api/v1/dev/projects/{id}/revision` — Access project revision checklist (Scope: `revision:read`)
+- **Rate Limiting:** Token-bucket rate limiting (100 req/min) with Redis backend and automatic 429 back-off headers (`Retry-After: 60`).
+
+---
+
+## Running Automated Tests
+
+```powershell
+# Run backend pytest suite (Phase 6-11 tests)
+.venv\Scripts\pytest services/api/tests
+
+# Run frontend Vitest test suite
+npm.cmd test --prefix apps/web -- --run
+
+# Run web production build typecheck
+npm.cmd run build --prefix apps/web
 ```
-Web client: `http://localhost:5173`
 
-### 3. Running Tests
-```bash
-# Run backend pytest suite
-pytest services/api/tests
-
-# Run frontend build check
-npm --prefix apps/web run build
-```

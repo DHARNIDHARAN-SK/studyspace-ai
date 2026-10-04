@@ -253,3 +253,30 @@ unner):** Executes queries systematically across:
      - Conversational Pipeline (Contextual query rewriting + Multi-query parallel retrieval + Redis semantic caching).
   5. **Persistence & Serialization:** Serialized benchmark datasets and results to docs/decap470_eval_dataset.json and docs/phase9_evaluation_results.json, and generated a comprehensive analytical report in docs/PHASE_9_EVALUATION_REPORT.md.
 - **Consequences:** Provides concrete, repeatable, empirical evidence demonstrating the performance trade-offs of each architectural tier: Phase 7 achieves a +22.5% increase in factual grounding (Faithfulness: 0.9011 vs 0.6758) and 33% faster generation due to noise-free context; Phase 8 perfectly resolves conversational follow-ups (Recall jumping from 0.00 to 0.5714 and MRR to 1.00 on pronoun queries); and Redis semantic caching delivers 518x speedups (< 65ms response) on repeated queries with zero LLM inference.
+
+
+---
+
+## ADR-023: Student Study Features Architecture — Revision, Study Guides, Quizzes & Exports (Phase 10)
+- **Date:** 2026-10-04
+- **Context:** Students require active study workflows beyond conversational Q&A: syllabus revision checklists with measurable progress, structured study guides grounded in their uploaded course documents, and interactive practice quizzes that protect expected answers until submission to prevent cheating or premature answer exposure.
+- **Decision:**
+  1. **Revision Checklist Lifecycle:** Defined 3 distinct topic states (`not_started`, `learning`, `revised`). Provided automatic percentage completion calculations (`completion_percentage = (revised / total) * 100`) and bidirectional entity linking (`RevisionItemLink`) connecting revision topics to documents, chunks, and study guides.
+  2. **Grounded Study Guide Generation:** Implemented `StudyService.generate_study_guide` which retrieves the highest-relevance context chunks from project documents and prompts `phi4-mini:latest` to generate structured Markdown guides (`summary`, `key_concepts`, `formula_sheet`, `definitions`) with chunk citations.
+  3. **Protected Answer Practice Quizzes:**
+     - When generating or listing quizzes, the API returns `QuizQuestionPublicResponse` with `expected_answer` and `explanation` strictly omitted.
+     - Only upon attempt submission (`POST /quizzes/{id}/attempts`) does the server grade submitted answers, reveal whether each response was correct, and return the underlying explanations and document citations.
+  4. **Multi-Format Export Engine:** Supports exporting revision checklists, study guides, and quizzes to clean Markdown, plaintext, or documents with automated download triggers on the frontend.
+- **Consequences:** Provides students with a comprehensive, syllabus-aligned revision ecosystem grounded in verified course materials, eliminating hallucinations through citation traceability and reinforcing learning through protected self-assessment.
+
+---
+
+## ADR-024: Developer API Platform, Scoped API Keys, and Redis Rate Limiting (Phase 11)
+- **Date:** 2026-10-04
+- **Context:** External integrations and automated student agents require secure programmatic access to chat querying, retrieval, and revision status without exposing user passwords or browser session tokens. Cross-tenant leakage must be mathematically impossible, and abusive traffic must be bounded.
+- **Decision:**
+  1. **API Key Generation & Hashing:** Keys are generated using `secrets.token_hex(24)` with prefix `sk_live_`. Keys are hashed using SHA-256 (`hashlib.sha256`) and stored in the database. The raw key is returned to the user strictly once upon creation. Key listings mask the secret, displaying only `key_prefix` (e.g. `sk_live_a1b2...`).
+  2. **Security & Scope Enforcement:** FastAPI dependency `get_api_key` validates incoming keys from `X-API-Key` or `Authorization: Bearer sk_live_...`. Scopes (`chat:write`, `retrieval:read`, `revision:read`, or `*`) are strictly enforced via `SecurityScopes`; unauthorized endpoints return 403 Forbidden. Revoked or expired keys return 401 Unauthorized.
+  3. **Rate Limiting & Tenant Bounding:** Token bucket rate limiting checks Redis (`rl:apikey:{key_id}:{minute}`) with a fallback to in-memory sliding window (100 req/min). Exceeding requests trigger 429 Too Many Requests with standard `Retry-After: 60` headers.
+  4. **Usage Audit Trail:** Every programmatic call logs an event to `UsageEvent` capturing latency, token consumption, status code, and timestamp, accessible via `GET /api/v1/developer/usage`.
+- **Consequences:** Safe, scalable developer API with cryptographically secure key storage, fine-grained access control, denial-of-service protection, and audit visibility.

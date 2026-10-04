@@ -6,7 +6,7 @@ Read `STUDYSPACE_AI_MASTER_ARCHITECTURE.md` completely before proposing changes.
 Act as the architecture-aware coding agent for StudySpace AI. The master architecture file defines the product scope, UX, architecture boundaries, data model, RAG behaviour, supported formats, security constraints, evaluation requirements, and deployment boundaries.
 
 ## Current status & instruction
-Phases 1 through 9 are COMPLETED, TESTED, and COMMITTED:
+Phases 1 through 11 are COMPLETED, TESTED, and COMMITTED:
 - Phase 1: Foundation & Monorepo Setup
 - Phase 2: Authentication & Multi-Tenant Workspaces
 - Phase 3: Database, Storage & Data Model Hardening
@@ -17,8 +17,12 @@ Phases 1 through 9 are COMPLETED, TESTED, and COMMITTED:
 - Phase 8: Conversational RAG + Multi-Query Expansion + Query Decomposition + Redis Semantic Cache
 - Phase 8.5: Authentication UI & Flow Hardening (Supabase Email/Password, Google & GitHub OAuth triggers, Password Recovery, Route Guards, Central Error Formatting, 20/20 frontend vitest tests)
 - Phase 9: RAG Evaluation & Comparative Benchmarking (Recall@K, MRR, nDCG, Context Precision, Faithfulness, Latency percentiles, controlled testing on DECAP470_CLOUD_COMPUTING.pdf)
+- Bug Fix Pass: Document Upload DB/Storage sync, New Chat uncoupling from sidebar, and Deterministic Workspace persistence (`f40cc98`)
+- Phase 10: Student Study Features (Revision Checklist, Grounded Study Guides, Protected Answer Practice Quizzes, Multi-format Exports) (`859abff`)
+- Phase 11: Developer API Platform & Security (SHA-256 API Key Management, Scopes, Programmatic Chat/Retrieval, Redis Rate Limiting, Audit Events) (`ec1e193`)
+- Canonical Automation: `scripts/start.ps1` and `scripts/stop.ps1` for local single-command orchestration.
 
-**Do NOT start Phase 10 or any future phases without explicit instruction.** Await the user's prompt before taking any action on Phase 10.
+**Do NOT start Phase 12 or any cloud deployment without explicit instruction.** Await the user's manual browser verification and instructions before proceeding.
 
 ## Requirements you must preserve
 - Education-focused document intelligence SaaS named StudySpace AI (working name).

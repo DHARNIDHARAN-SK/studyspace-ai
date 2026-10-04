@@ -10,8 +10,11 @@
 - **Phase 7 (Advanced Hybrid RAG: BM25/Lexical + RRF + Local Reranking):** COMPLETED & COMMITTED (`4dbd4c9`)
 - **Phase 8 (Conversational RAG + Multi-Query + Semantic Cache):** COMPLETED & COMMITTED (`d4b0648`)
 - **Phase 8.5 (Authentication UI & Flow Completion):** COMPLETED & COMMITTED (`cad6581`)
-- **Phase 9 (RAG Evaluation & Comparative Benchmarking):** COMPLETED & VERIFIED
-- **Current Repository State:** Complete conversational RAG system with multi-query expansion, semantic caching, production Supabase authentication, and a full automated RAG evaluation framework (Recall@K, MRR, nDCG, Context Precision, Faithfulness, Answer Relevance, Latency percentiles) benchmarked against the 327-page textbook `DECAP470_CLOUD_COMPUTING.pdf`. All 20 frontend Vitest tests pass, all 8 evaluation tests pass, and end-to-end multi-pipeline benchmarks are fully documented.
+- **Phase 9 (RAG Evaluation & Comparative Benchmarking):** COMPLETED & COMMITTED (`fa994ae`, `a83d170`)
+- **Bug Fix Pass (Source Upload, Chat State, Workspace Derivation):** COMPLETED & COMMITTED (`f40cc98`)
+- **Phase 10 (Student Study Features — Revision, Guides, Quizzes, Exports):** COMPLETED & COMMITTED (`859abff`)
+- **Phase 11 (Developer API & Security — API Keys, Programmatic API, Rate Limiting, Audit):** COMPLETED & COMMITTED (`ec1e193`)
+- **Current Repository State:** Fully operational academic intelligence platform featuring grounded multi-format ingestion, hybrid retrieval, local reranking, conversational multi-query expansion, semantic caching, student study features (checklist, grounded study guides, protected-answer quizzes, exports), developer platform API with SHA-256 hashed keys and Redis rate limiting, and canonical startup automation scripts (`scripts/start.ps1`, `scripts/stop.ps1`). All 20 frontend Vitest tests and all 8 backend test suites pass with 100% success.
 
 ---
 
@@ -143,6 +146,8 @@
 
 ---
 
-## 10. Next Phase Boundary
-- **Phase 10:** Student Study Features — Revision Checklist, Quiz Generation (MCQ, Short-Answer, Difficult), and Study Guide Generation.
-- **Phase 9 Boundary Check:** RAG Evaluation and Benchmarking is complete, verified, and committed. Do NOT auto-start Phase 10 without user instruction.
+## 10. Completed Phases 10 & 11 & Next Phase Boundary
+- **Phase 10 (Student Study Features):** COMPLETED & COMMITTED (`859abff`). Full Revision Checklist (3 states, progress percentage, auto-stat updates), grounded Study Guide generator with live export, source-grounded Quizzes with hidden answer keys, interactive grading, citations, and explanations.
+- **Phase 11 (Developer API & Security):** COMPLETED & COMMITTED (`ec1e193`). SHA-256 hashed API key management (`sk_live_...`), scopes (`chat:write`, `retrieval:read`, `revision:read`), Redis-backed rate limiting (100 req/min), audit logging (`usage_events`), and programmatic developer endpoints (`/api/v1/dev/...`).
+- **Canonical Startup Scripts:** Created `scripts/start.ps1` and `scripts/stop.ps1`.
+- **Phase 12 Boundary Check:** Phase 12 (Cloud Deployment / Production Hardening) is strictly paused. STOPPED and waiting for user manual testing.
