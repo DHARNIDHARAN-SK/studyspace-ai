@@ -20,6 +20,7 @@ Phases 1 through 11 are COMPLETED, TESTED, and COMMITTED:
 - Bug Fix Pass: Document Upload DB/Storage sync, New Chat uncoupling from sidebar, and Deterministic Workspace persistence (`f40cc98`)
 - Phase 10: Student Study Features (Revision Checklist, Grounded Study Guides, Protected Answer Practice Quizzes, Multi-format Exports) (`859abff`)
 - Phase 11: Developer API Platform & Security (SHA-256 API Key Management, Scopes, Programmatic Chat/Retrieval, Redis Rate Limiting, Audit Events) (`ec1e193`)
+- Phase 11 Critical Bug Fixes: Scanned PDF OCR Fallback Ingestion (thread-isolated WinRT OCR), Zero-Chunk Ingestion Invariant enforcement, Real Persisted Conversation Creation Route (`POST /api/v1/projects/{project_id}/conversations`), Frontend "+ New Chat" atomic persistence and immediate sidebar sync, Auto-Renaming on first query, Complete elimination of static/seeded test data in Quizzes, Study Guides, and Revision Checklists, and Honest Contact Email Reporting.
 - Canonical Automation: `scripts/start.ps1` and `scripts/stop.ps1` for local single-command orchestration.
 
 **Do NOT start Phase 12 or any cloud deployment without explicit instruction.** Await the user's manual browser verification and instructions before proceeding.

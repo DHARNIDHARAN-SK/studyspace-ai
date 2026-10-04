@@ -269,3 +269,38 @@ class RedisSemanticCache:
             logger.info("Stored semantic cache entry %s for query: '%s'", entry_id, query)
         except Exception as e:
             logger.warning("Redis semantic cache store error: %s", e)
+
+    async def invalidate_project_cache(
+        self,
+        workspace_id: uuid.UUID,
+        project_id: uuid.UUID,
+    ) -> int:
+        """
+        Invalidates all cached semantic queries for the specified project
+        when document corpus changes (upload, delete, reindex).
+        """
+        try:
+            client = await self.get_client()
+            if not client:
+                return 0
+
+            prefix = self._prefix(workspace_id, project_id)
+            active_set_key = f"{prefix}:semcache:active_keys"
+            entry_ids = await client.smembers(active_set_key)
+            if not entry_ids:
+                return 0
+
+            keys_to_delete = [f"{prefix}:semcache:entry:{eid}" for eid in entry_ids]
+            keys_to_delete.append(active_set_key)
+
+            deleted_count = await client.delete(*keys_to_delete)
+            logger.info(
+                "Invalidated semantic cache for project %s (%d keys removed)",
+                project_id,
+                deleted_count,
+            )
+            return deleted_count
+        except Exception as e:
+            logger.warning("Failed to invalidate project semantic cache: %s", e)
+            return 0
+

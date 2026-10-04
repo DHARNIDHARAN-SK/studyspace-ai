@@ -160,4 +160,30 @@
 - **Phase 10 (Student Study Features):** COMPLETED & COMMITTED (`859abff`). Full Revision Checklist (3 states, progress percentage, auto-stat updates), grounded Study Guide generator with live export, source-grounded Quizzes with hidden answer keys, interactive grading, citations, and explanations.
 - **Phase 11 (Developer API & Security):** COMPLETED & COMMITTED (`ec1e193`). SHA-256 hashed API key management (`sk_live_...`), scopes (`chat:write`, `retrieval:read`, `revision:read`), Redis-backed rate limiting (100 req/min), audit logging (`usage_events`), and programmatic developer endpoints (`/api/v1/dev/...`).
 - **Canonical Startup Scripts:** Created `scripts/start.ps1` and `scripts/stop.ps1`.
-- **Phase 12 Boundary Check:** Phase 12 (Cloud Deployment / Production Hardening) is strictly paused. STOPPED and waiting for user manual testing.
+
+---
+
+## 11. Phase 11 Critical Bug Fixes & Dynamic Project Grounding
+- **Bug Fix 1 — Scanned PDF OCR Fallback Ingestion:**
+  - Resolved WinRT OCR collision (`asyncio.run()` in running loop) by moving OCR extraction to thread-isolated workers (`concurrent.futures.ThreadPoolExecutor(max_workers=4)`).
+  - Verified on `D:\RAG_DATA_TESTING\BIG_DATA_ANALYTICS_NOTES.pdf`: all 148 pages scanned and parsed in ~15s.
+  - Enforced strict ingestion invariants: 0-chunk documents fail with `NO_EXTRACTABLE_TEXT` and are never marked `indexed`. Status `indexed` is set exclusively after all chunks and real 768-dim embeddings are verified in pgvector.
+- **Bug Fix 2 — Real Persisted Conversation Creation Flow ("+ New Chat"):**
+  - Implemented `POST /api/v1/projects/{project_id}/conversations` with multi-tenant and workspace authorization checks.
+  - Generates real UUID, status `active`, and default title `"New Chat"`.
+  - Frontend "+ New Chat" calls API, updates sidebar immediately, selects new conversation, clears visible messages, displays starter prompts, focuses composer, and prevents double clicks.
+  - Auto-renames conversation title from `"New Chat"` to the initial user query upon sending the first message.
+  - Synchronized project selection on page load in `ProjectContext.tsx` ensuring `big_data` is selected instead of `"Select Project..."`.
+- **Bug Fix 3 — Elimination of Static / Seeded Data Across Study Features:**
+  - Removed hardcoded Cloud Computing fallbacks in `study_service.py` (quizzes, study guides, revision checklists).
+  - Verified on `big_data` project (`ae9d5ab4-273b-4f3b-a5fe-42ec9bc0a407`): Chat, Quizzes, Study Guide, and Revision Checklists are strictly grounded in `BIG_DATA_ANALYTICS_NOTES.pdf`. Zero Cloud Computing leaks.
+  - For projects without uploaded documents, dynamically synthesizes content using the user-specified topic via LLM rather than serving canned mock data.
+- **Bug Fix 4 — Honest Contact Email Reporting:**
+  - Verified `ContactPage.tsx` and `contact.py`: success message is displayed only when delivery is confirmed (`status === "delivered"`). Unconfigured SMTP credentials surface an honest error without false success alerts.
+- **Verification Summary:**
+  - 81 backend pytest tests passing (100% pass rate).
+  - 20 frontend Vitest tests passing (100% pass rate).
+  - Frontend production build compiles with 0 errors via `tsc -b && vite build`.
+  - Reserved test file `D:\RAG_DATA_TESTING\DECAP470_CLOUD_COMPUTING.pdf` preserved intact.
+  - Phase 12 strictly paused at the completion boundary.
+

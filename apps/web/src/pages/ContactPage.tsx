@@ -29,8 +29,12 @@ export function ContactPage() {
         institution: institution.trim() || undefined,
         message: message.trim(),
       });
-      setSubmitted(true);
-      setDeliveryNote(res.message);
+      if (res.success && res.status === "delivered") {
+        setSubmitted(true);
+        setDeliveryNote(res.message);
+      } else {
+        setError(res.message || "Email delivery failed or is not configured on the server.");
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to submit inquiry. Please try again.");
     } finally {

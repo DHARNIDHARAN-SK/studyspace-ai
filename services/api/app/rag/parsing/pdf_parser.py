@@ -13,6 +13,24 @@ class PDFParsingError(AppError):
         super().__init__(message=message, code=code, status_code=status_code)
 
 
+def _ocr_page_worker(img_bytes_list: List[bytes], lang: str = "en") -> str:
+    """Worker function executed in ThreadPoolExecutor to run WinRT OCR safely outside main event loop."""
+    import winocr
+    from PIL import Image
+
+    extracted: List[str] = []
+    for raw in img_bytes_list:
+        try:
+            img = Image.open(io.BytesIO(raw))
+            res = winocr.recognize_pil_sync(img, lang=lang)
+            txt = res.get("text", "").strip()
+            if txt:
+                extracted.append(txt)
+        except Exception:
+            continue
+    return "\n\n".join(extracted)
+
+
 class PDFParser(BaseParser):
     """
     Production-ready PDF parser using pypdf.
@@ -139,6 +157,74 @@ class PDFParser(BaseParser):
         if total_pages > 0 and (total_extracted_chars / total_pages) < 20:
             is_scanned = True
             logger.info("PDF '%s' flagged as scanned or image-only (%d total chars over %d pages).", filename, total_extracted_chars, total_pages)
+
+            # Attempt OCR recovery if no text blocks could be extracted
+            if not blocks:
+                try:
+                    import concurrent.futures
+                    logger.info("Initiating native multi-threaded OCR for scanned PDF '%s' (%d pages)...", filename, total_pages)
+
+                    page_images = []
+                    for page in reader.pages:
+                        imgs = [img_obj.data for img_obj in page.images if hasattr(img_obj, "data")]
+                        page_images.append(imgs)
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                        page_texts = list(executor.map(lambda imgs: _ocr_page_worker(imgs, "en"), page_images))
+
+                    for page_idx, full_page_text in enumerate(page_texts):
+                        page_number = page_idx + 1
+                        if not full_page_text or not full_page_text.strip():
+                            continue
+
+                        total_extracted_chars += len(full_page_text)
+                        lines = [l.strip() for l in full_page_text.splitlines() if l.strip()]
+                        paragraph_buffer: List[str] = []
+                        for line in lines:
+                            if self._is_probable_heading(line):
+                                if paragraph_buffer:
+                                    p_content = " ".join(paragraph_buffer).strip()
+                                    if p_content:
+                                        blocks.append(
+                                            ParsedBlock(
+                                                content=p_content,
+                                                block_type="paragraph",
+                                                page_number=page_number,
+                                                heading=current_heading,
+                                                section_path=section_path,
+                                            )
+                                        )
+                                    paragraph_buffer = []
+                                current_heading = line
+                                section_path = line
+                                blocks.append(
+                                    ParsedBlock(
+                                        content=line,
+                                        block_type="heading",
+                                        page_number=page_number,
+                                        heading=current_heading,
+                                        section_path=section_path,
+                                    )
+                                )
+                            else:
+                                paragraph_buffer.append(line)
+                        if paragraph_buffer:
+                            p_content = " ".join(paragraph_buffer).strip()
+                            if p_content:
+                                blocks.append(
+                                    ParsedBlock(
+                                        content=p_content,
+                                        block_type="paragraph",
+                                        page_number=page_number,
+                                        heading=current_heading,
+                                        section_path=section_path,
+                                    )
+                                )
+                    logger.info("OCR completed for '%s': extracted %d blocks across %d pages", filename, len(blocks), total_pages)
+                except ImportError:
+                    logger.info("OCR module not installed; skipping OCR for '%s'.", filename)
+                except Exception as ocr_exc:
+                    logger.warning("OCR processing failed for '%s': %s", filename, ocr_exc)
 
         # Metadata extraction
         metadata = {}

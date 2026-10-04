@@ -219,8 +219,10 @@ class ChatService:
                 project_id=project_id,
                 user_id=user_id,
                 conversation_id=conversation_id,
-                title=clean_query[:40] if clean_query else "New Chat",
+                title=clean_query[:50].strip() if clean_query else "New Chat",
             )
+            if conv.title in ("New Chat", "New Conversation") and clean_query:
+                conv.title = clean_query[:50].strip()
 
             # 3. Handle Casual Conversation (NO RAG)
             if classification.intent == "casual":
@@ -501,6 +503,37 @@ class ChatService:
                     "rag_metadata": getattr(rag_result, "rag_metadata", {}),
                 },
                 "metrics": metrics,
+            }
+
+    async def create_conversation(
+        self,
+        workspace_id: uuid.UUID,
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+        title: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            await ensure_tenant_hierarchy(session, user_id, workspace_id, project_id)
+            conv = Conversation(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                user_id=user_id,
+                title=title or "New Chat",
+                status="active",
+            )
+            session.add(conv)
+            await session.commit()
+            await session.refresh(conv)
+            return {
+                "id": str(conv.id),
+                "workspace_id": str(conv.workspace_id),
+                "project_id": str(conv.project_id),
+                "title": conv.title,
+                "is_pinned": conv.is_pinned,
+                "status": conv.status,
+                "created_at": conv.created_at.isoformat(),
+                "updated_at": conv.updated_at.isoformat(),
             }
 
     async def list_conversations(

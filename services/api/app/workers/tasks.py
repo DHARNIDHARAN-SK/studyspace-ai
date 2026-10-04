@@ -42,6 +42,7 @@ def ingest_document_task(
                 workspace_id=uuid.UUID(workspace_id),
                 project_id=uuid.UUID(project_id),
                 job_id=uuid.UUID(job_id) if job_id else None,
+                generate_embeddings=True,
             )
         )
         logger.info("Celery task completed successfully: doc=%s", document_id)

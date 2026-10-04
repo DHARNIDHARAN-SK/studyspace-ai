@@ -227,3 +227,32 @@ async def test_chat_api_modes_and_provenance(chat_test_env):
             assert data_adv["metrics"]["lexical_candidates"] == 15
             assert data_adv["metrics"]["fused_candidates"] == 22
             mock_adv_exec.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_conversation_endpoint(chat_test_env):
+    env = chat_test_env
+    token_a = generate_test_token(str(env["user_a"]))
+    token_b = generate_test_token(str(env["user_b"]))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Create conversation as user A
+        resp = await client.post(
+            f"/api/v1/projects/{env['proj_a']}/conversations",
+            headers={"Authorization": f"Bearer {token_a}"},
+            json={"title": "Custom Topic Discussion"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["title"] == "Custom Topic Discussion"
+        assert "id" in data
+        assert data["status"] == "active"
+
+        # Cross-tenant creation attempt -> 403 or 404
+        cross_resp = await client.post(
+            f"/api/v1/projects/{env['proj_a']}/conversations",
+            headers={"Authorization": f"Bearer {token_b}"},
+            json={"title": "Unauthorized Conv"},
+        )
+        assert cross_resp.status_code in (403, 404)
+

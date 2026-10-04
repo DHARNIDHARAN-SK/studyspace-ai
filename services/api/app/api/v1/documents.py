@@ -188,6 +188,7 @@ async def upload_document(
             workspace_id=resolved_ws_uuid,
             project_id=proj_uuid,
             job_id=job_uuid,
+            generate_embeddings=True,
         )
 
     return DocumentUploadResponse(
@@ -286,6 +287,7 @@ async def retry_document_ingestion(
             workspace_id=resolved_ws_uuid,
             project_id=proj_uuid,
             job_id=job_uuid,
+            generate_embeddings=True,
         )
 
     return _to_document_response(doc)
@@ -311,11 +313,20 @@ async def delete_document(
     doc.deleted_at = datetime.now(timezone.utc)
     await db.commit()
 
+    # Invalidate project semantic cache on document deletion
+    try:
+        from app.rag.cache.redis_cache import RedisSemanticCache
+        cache = RedisSemanticCache()
+        await cache.invalidate_project_cache(workspace_id=project.workspace_id, project_id=proj_uuid)
+    except Exception as cache_err:
+        logger.debug("Semantic cache invalidation on delete skipped: %s", cache_err)
+
     # Clean up storage payload asynchronously
     try:
         storage_provider = get_storage_provider()
         await storage_provider.delete_object(DOCUMENTS_BUCKET, doc.storage_path)
     except Exception as exc:
         logger.warning("Could not delete physical storage object: %s", exc)
+
 
     return None

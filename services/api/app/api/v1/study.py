@@ -69,7 +69,23 @@ async def create_revision_item(
     )
 
 
+@router.post("/revision/generate", response_model=RevisionListResponse, status_code=status.HTTP_201_CREATED)
+async def generate_revision_topics(
+    project_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Optional[AsyncSession] = Depends(get_db_optional),
+) -> RevisionListResponse:
+    user_uuid, ws_uuid, proj_uuid = _parse_uuids(current_user, project_id)
+    return await study_service.generate_revision_topics(
+        user_id=user_uuid,
+        workspace_id=ws_uuid,
+        project_id=proj_uuid,
+        db=db,
+    )
+
+
 @router.get("/revision", response_model=RevisionListResponse)
+
 async def list_revision_items(
     project_id: str,
     current_user: AuthenticatedUser = Depends(get_current_user),

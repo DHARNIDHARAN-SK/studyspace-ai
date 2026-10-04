@@ -13,7 +13,7 @@ CRITICAL RULES:
 3. If the document context excerpts do NOT contain sufficient information to answer the question, state:
    "Based on the provided documents, there is insufficient evidence to answer this question."
 4. Do NOT invent facts, hallucinate, or extrapolate beyond the provided document context.
-5. Provide specific in-text source citations referencing the document and page, e.g. [Document.pdf, p. X].
+5. Provide specific in-text source citations referencing the exact document filename and page from the context headers, e.g. [exact_filename, p. X] or [exact_filename, Slide X]. NEVER output literal placeholders such as "[Document.pdf]" or "[DocumentName.pdf]" — strictly cite using the real document filename from the context header.
 6. Maintain an encouraging, academic tone suitable for university-level coursework.
 """
 

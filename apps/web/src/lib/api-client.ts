@@ -278,6 +278,21 @@ export async function sendChatMessage(
   );
 }
 
+export async function createConversation(
+  token: string,
+  projectId: string,
+  title: string = "New Chat"
+): Promise<Conversation> {
+  return fetchWithAuth<Conversation>(
+    `/api/v1/projects/${projectId}/conversations`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }
+  );
+}
+
 export async function listConversations(
   token: string,
   projectId: string
@@ -370,6 +385,19 @@ export async function deleteRevisionItem(
     `/api/v1/projects/${projectId}/revision/${itemId}`,
     token,
     { method: "DELETE" }
+  );
+}
+
+export async function generateRevisionTopics(
+  token: string,
+  projectId: string
+): Promise<RevisionListResponse> {
+  return fetchWithAuth<RevisionListResponse>(
+    `/api/v1/projects/${projectId}/revision/generate`,
+    token,
+    {
+      method: "POST",
+    }
   );
 }
 

@@ -444,6 +444,199 @@ class StudyService:
 
         return RevisionLinkResponse(**link_dict)
 
+    async def generate_revision_topics(
+        self,
+        user_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        project_id: uuid.UUID,
+        num_topics: int = 5,
+        db: Optional[AsyncSession] = None,
+    ) -> RevisionListResponse:
+        now = utc_now()
+
+        # 1. Verify project has indexed documents/chunks in DB
+        has_chunks = False
+        if db is not None:
+            c_stmt = (
+                select(func.count(DocumentChunk.id))
+                .where(
+                    DocumentChunk.project_id == project_id,
+                    DocumentChunk.workspace_id == workspace_id,
+                )
+            )
+            c_res = await db.execute(c_stmt)
+            has_chunks = (c_res.scalar() or 0) > 0
+
+        retrieved_chunks = []
+        try:
+            retriever = HybridRetriever()
+            ret_res = await retriever.retrieve(
+                query="syllabus units core concepts learning objectives key algorithms review topics architecture",
+                workspace_id=workspace_id,
+                project_id=project_id,
+                top_k=8,
+            )
+            retrieved_chunks = ret_res.chunks
+        except Exception:
+            try:
+                dense_retriever = VectorRetriever()
+                retrieved_chunks = await dense_retriever.retrieve(
+                    query="syllabus units core concepts learning objectives key algorithms review topics architecture",
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    top_k=8,
+                )
+            except Exception as e:
+                logger.warning("Retrieval failed during revision topic generation: %s", e)
+
+        # Fallback to general query if empty
+        if not retrieved_chunks:
+            try:
+                dense_retriever = VectorRetriever()
+                retrieved_chunks = await dense_retriever.retrieve(
+                    query="introduction overview fundamentals syllabus core concepts",
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    top_k=8,
+                )
+            except Exception:
+                pass
+
+        if not retrieved_chunks and not has_chunks:
+            raise AppError(
+                code="NO_INDEXED_DOCUMENTS",
+                message="Cannot generate revision checklist: No indexed documents or chunks found in this project. Please upload and index course documents first.",
+                status_code=400,
+            )
+
+        doc_name = retrieved_chunks[0].document_filename if retrieved_chunks else "Course Documents"
+        context_evidence = self.context_builder.build_context(retrieved_chunks).context_text[:6000] if retrieved_chunks else ""
+
+        prompt = (
+            f"Generate {num_topics} structured revision checklist items for university students preparing for an exam.\n"
+            f"Document Source: {doc_name}\n\n"
+            "Format the response strictly as a JSON array of objects with 'title' and 'description' keys:\n"
+            "[\n"
+            "  {\n"
+            '    "title": "Clear action-oriented topic title (e.g. Master MapReduce Data Flow & Fault Tolerance)",\n'
+            '    "description": "Specific subtopics, algorithms, or definitions to review from the document."\n'
+            "  }\n"
+            "]\n\n"
+            f"Context Evidence:\n{context_evidence}\n"
+        )
+
+        topics_data = []
+        try:
+            llm = get_llm_provider()
+            resp = await llm.generate(
+                prompt=prompt,
+                system_prompt="You are an expert academic curriculum reviewer. Ground all revision topics strictly in the provided context evidence. Return ONLY valid JSON.",
+                max_tokens=1500,
+                temperature=0.2,
+            )
+            content = resp.content.strip()
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                topics_data = parsed[:num_topics]
+        except Exception as e:
+            logger.warning("LLM call failed for revision topics generation, extracting from chunks: %s", e)
+
+        # Grounded fallback if LLM returned nothing or failed
+        if not topics_data:
+            if retrieved_chunks:
+                for idx, c in enumerate(retrieved_chunks[:num_topics]):
+                    sec = (c.metadata or {}).get("section_path") or f"Section {idx + 1}"
+                    snippet_lead = c.content.strip()[:100].replace("\n", " ")
+                    topics_data.append({
+                        "title": f"Review {doc_name} — {sec}",
+                        "description": f"Focus on: {snippet_lead}...",
+                    })
+            else:
+                topics_data = [
+                    {
+                        "title": f"Core Foundations in {doc_name}",
+                        "description": "Review foundational definitions, architectural models, and principles.",
+                    },
+                    {
+                        "title": f"Technical Operations & Workflows in {doc_name}",
+                        "description": "Review data structures, workflow mechanics, and implementation details.",
+                    },
+                ]
+
+        # Persist generated topics as RevisionItems
+        if db is not None:
+            await ensure_tenant_hierarchy(db, user_id, workspace_id, project_id)
+
+        for t in topics_data:
+            item_id = uuid.uuid4()
+            title = t.get("title", f"Revision Topic — {doc_name}")
+            description = t.get("description", "")
+            
+            item_dict = {
+                "id": str(item_id),
+                "workspace_id": str(workspace_id),
+                "project_id": str(project_id),
+                "user_id": str(user_id),
+                "title": title,
+                "description": description,
+                "status": "not_started",
+                "notes": None,
+                "created_at": now,
+                "updated_at": now,
+                "links": [],
+            }
+            store.revision_items[str(item_id)] = item_dict
+
+            if db is not None:
+                try:
+                    db_item = RevisionItem(
+                        id=item_id,
+                        workspace_id=workspace_id,
+                        project_id=project_id,
+                        user_id=user_id,
+                        title=title,
+                        description=description,
+                        status="not_started",
+                        notes=None,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    db.add(db_item)
+                    if retrieved_chunks:
+                        first_chunk = retrieved_chunks[0]
+                        link_id = uuid.uuid4()
+                        db_link = RevisionItemLink(
+                            id=link_id,
+                            revision_item_id=item_id,
+                            target_type="document",
+                            target_id=first_chunk.document_id,
+                            metadata_={"filename": first_chunk.document_filename, "topic": title},
+                            created_at=now,
+                        )
+                        db.add(db_link)
+                except Exception as e:
+                    logger.warning("Failed to persist revision item: %s", e)
+
+        if db is not None:
+            try:
+                await db.commit()
+            except Exception as e:
+                logger.warning("Failed to commit generated revision items: %s", e)
+                await db.rollback()
+
+        return await self.list_revision_items(
+            user_id=user_id,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            db=db,
+        )
+
+
     # --------------------------------------------------------------------------
     # Study Guides
     # --------------------------------------------------------------------------
@@ -463,10 +656,25 @@ class StudyService:
         # 1. Retrieve project evidence via RAG
         retrieved_chunks = []
         citations_data = []
+
+        # Check DB chunk count if DB is available
+        has_chunks = False
+        if db is not None:
+            c_stmt = (
+                select(func.count(DocumentChunk.id))
+                .where(
+                    DocumentChunk.project_id == project_id,
+                    DocumentChunk.workspace_id == workspace_id,
+                )
+            )
+            c_res = await db.execute(c_stmt)
+            has_chunks = (c_res.scalar() or 0) > 0
+
+        search_query = topic.strip() if topic else "key concepts, definitions, architecture, and principles"
         try:
             retriever = HybridRetriever()
             ret_res = await retriever.retrieve(
-                query=topic,
+                query=search_query,
                 workspace_id=workspace_id,
                 project_id=project_id,
                 top_k=6,
@@ -476,7 +684,7 @@ class StudyService:
             try:
                 dense_retriever = VectorRetriever()
                 retrieved_chunks = await dense_retriever.retrieve(
-                    query=topic,
+                    query=search_query,
                     workspace_id=workspace_id,
                     project_id=project_id,
                     top_k=6,
@@ -484,14 +692,34 @@ class StudyService:
             except Exception as e:
                 logger.warning("Retrieval failed during study guide generation: %s", e)
 
+        # Fallback to general query if specific topic returned no chunks
+        if not retrieved_chunks:
+            try:
+                dense_retriever = VectorRetriever()
+                retrieved_chunks = await dense_retriever.retrieve(
+                    query="introduction overview fundamentals syllabus core concepts",
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    top_k=6,
+                )
+            except Exception:
+                pass
+
+        if not retrieved_chunks and not has_chunks and not (topic and topic.strip()):
+            raise AppError(
+                code="NO_INDEXED_DOCUMENTS",
+                message="Cannot generate study guide: No indexed documents found and no topic specified. Please upload course documents or provide a topic.",
+                status_code=400,
+            )
+
         # 2. Build context
         if retrieved_chunks:
             built_context = self.context_builder.build_context(retrieved_chunks)
-            context_text = built_context.text
+            context_text = built_context.context_text
             for c in built_context.citations:
                 citations_data.append({
                     "document_id": str(c.document_id),
-                    "document_title": c.document_title,
+                    "document_title": getattr(c, "document_filename", getattr(c, "document_title", "Document")),
                     "page_start": c.page_start,
                     "page_end": c.page_end,
                     "section_path": c.section_path or "",
@@ -502,9 +730,12 @@ class StudyService:
         else:
             context_text = f"Study material on the topic: {topic}."
 
+        doc_name = retrieved_chunks[0].document_filename if retrieved_chunks else "Course Documents"
+
         # 3. Prompt LLM or use structured academic synthesis
         prompt = (
             f"Generate a comprehensive, high-yield academic study guide for students studying: '{topic}'.\n"
+            f"Document Source: {doc_name}\n"
             f"Guide Type: {guide_type}\n"
             f"Focus Areas: {', '.join(focus_areas) if focus_areas else 'Core principles, architectures, and key terminology'}\n\n"
             f"Context Evidence:\n{context_text}\n\n"
@@ -533,17 +764,16 @@ class StudyService:
                 f"# Study Guide: {topic}\n\n"
                 f"## 1. Executive Summary & Overview\n"
                 f"This study guide reviews the foundational principles and technical mechanisms of **{topic}** "
-                f"based on project course materials.\n\n"
-                f"## 2. Core Concepts & Architecture\n"
-                f"- **Core Theory**: Foundational models, service paradigms, and resource abstractions.\n"
-                f"- **Operational Models**: Practical deployments, lifecycle management, and architectural boundaries.\n\n"
+                f"derived from course materials in **{doc_name}**.\n\n"
+                f"## 2. Core Concepts & Theory\n"
+                f"- **Core Foundations**: Key principles and core definitions derived directly from uploaded project documents.\n"
+                f"- **Technical Mechanisms**: Structured processes, operations, and architectural boundaries.\n\n"
                 f"## 3. Key Terminology\n"
-                f"- **{topic}**: Primary domain focus covering key definitions and practical application.\n"
-                f"- **Virtualization & Abstraction**: Mechanism for decoupled resource provisioning.\n\n"
+                f"- **{topic}**: Primary subject domain and conceptual scope.\n\n"
                 f"## 4. Grounded Course Material Excerpts\n"
                 f"{context_text[:2000]}\n\n"
                 f"## 5. Revision Checklist\n"
-                f"- [ ] Explain the key characteristics of {topic}.\n"
+                f"- [ ] Explain the key characteristics of {topic} based on {doc_name}.\n"
                 f"- [ ] Compare and contrast operational trade-offs.\n"
                 f"- [ ] Review architectural diagrams and source citations.\n"
             )
@@ -711,7 +941,20 @@ class StudyService:
         quiz_title = title or f"{topic or 'Course Materials'} — Practice Quiz"
 
         # 1. Retrieve chunks
-        search_query = topic or "key concepts, definitions, architecture, and principles"
+        # Verify project has indexed chunks in DB if DB available
+        has_chunks = False
+        if db is not None:
+            c_stmt = (
+                select(func.count(DocumentChunk.id))
+                .where(
+                    DocumentChunk.project_id == project_id,
+                    DocumentChunk.workspace_id == workspace_id,
+                )
+            )
+            c_res = await db.execute(c_stmt)
+            has_chunks = (c_res.scalar() or 0) > 0
+
+        search_query = topic.strip() if topic else "key concepts, definitions, architecture, and principles"
         retrieved_chunks = []
         try:
             retriever = HybridRetriever()
@@ -734,6 +977,26 @@ class StudyService:
             except Exception as e:
                 logger.warning("Retrieval failed during quiz generation: %s", e)
 
+        # Fallback to broad query if specific topic returned no chunks
+        if not retrieved_chunks:
+            try:
+                dense_retriever = VectorRetriever()
+                retrieved_chunks = await dense_retriever.retrieve(
+                    query="introduction overview fundamentals syllabus core concepts",
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    top_k=8,
+                )
+            except Exception:
+                pass
+
+        if not retrieved_chunks and not has_chunks and not (topic and topic.strip()):
+            raise AppError(
+                code="NO_INDEXED_DOCUMENTS",
+                message="Cannot generate quiz: No indexed documents found and no topic specified. Please upload course documents or provide a topic.",
+                status_code=400,
+            )
+
         # 2. Build questions
         questions_raw = []
 
@@ -742,9 +1005,13 @@ class StudyService:
         for i in range(num_questions):
             desired_types.append(types[i % len(types)])
 
+        doc_name = retrieved_chunks[0].document_filename if retrieved_chunks else "Course Materials"
+        context_evidence = self.context_builder.build_context(retrieved_chunks).context_text[:6000] if retrieved_chunks else ""
+
         # Construct generation prompt for LLM
         prompt = (
-            f"Generate a {num_questions}-question academic quiz for university students based on these materials.\n"
+            f"Generate a {num_questions}-question academic quiz for university students based strictly on these materials.\n"
+            f"Course Document: {doc_name}\n"
             f"Topic: {topic or 'Course Concepts'}\n"
             f"Difficulty: {difficulty}\n"
             f"Required Question Types: {desired_types}\n\n"
@@ -760,14 +1027,14 @@ class StudyService:
             "  }\n"
             "]\n\n"
             f"Context Evidence:\n"
-            f"{self.context_builder.build_context(retrieved_chunks).text[:6000] if retrieved_chunks else 'Cloud computing and systems fundamentals.'}\n"
+            f"{context_evidence}\n"
         )
 
         try:
             llm = get_llm_provider()
             resp = await llm.generate(
                 prompt=prompt,
-                system_prompt="You are a strict, objective university exam author. Produce valid JSON questions only.",
+                system_prompt="You are a strict, objective university exam author. Ground all questions exclusively in the provided document context. Produce valid JSON questions only.",
                 max_tokens=3000,
                 temperature=0.2,
             )
@@ -782,41 +1049,48 @@ class StudyService:
             if isinstance(parsed, list):
                 questions_raw = parsed[:num_questions]
         except Exception as e:
-            logger.warning("LLM question generation failed or invalid JSON: %s. Using high-yield fallback questions.", e)
+            logger.warning("LLM question generation failed or invalid JSON: %s. Using grounded dynamic synthesis.", e)
 
-        # Fallback question generation if LLM was unavailable
+        # Fallback question generation strictly grounded in the project's actual retrieved chunks
         if not questions_raw or len(questions_raw) == 0:
-            questions_raw = [
-                {
-                    "question_type": "mcq",
-                    "difficulty": "medium",
-                    "prompt": f"According to the course materials on {topic or 'Cloud Computing'}, which model provides virtualized hardware resources over a network?",
-                    "options": [
-                        "A) Infrastructure as a Service (IaaS)",
-                        "B) Software as a Service (SaaS)",
-                        "C) Platform as a Service (PaaS)",
-                        "D) Function as a Service (FaaS)",
-                    ],
-                    "expected_answer": "A",
-                    "explanation": "IaaS provides on-demand access to fundamental computing resources like virtual machines, storage, and networking.",
-                },
-                {
-                    "question_type": "short_answer",
-                    "difficulty": "medium",
-                    "prompt": f"What is the primary role of a hypervisor in cloud virtualization architectures?",
-                    "options": None,
-                    "expected_answer": "Hardware virtualization and guest OS management",
-                    "explanation": "A hypervisor (or Virtual Machine Monitor) abstracts hardware, allowing multiple guest operating systems to share physical resources safely.",
-                },
-                {
-                    "question_type": "difficult",
-                    "difficulty": "hard",
-                    "prompt": f"In a multi-tenant cloud environment, how does the shared responsibility security model divide accountability between the cloud provider and the customer?",
-                    "options": None,
-                    "expected_answer": "The provider secures the infrastructure (cloud itself), while the customer secures data, access, and guest configurations (in the cloud).",
-                    "explanation": "The cloud provider secures physical facilities, hardware, and hypervisors, while customers are responsible for identity, access management, encryption, and application software.",
-                },
-            ]
+            questions_raw = []
+            for idx in range(num_questions):
+                c = retrieved_chunks[idx % len(retrieved_chunks)] if retrieved_chunks else None
+                q_type = desired_types[idx % len(desired_types)]
+                sec = (c.section_path or c.heading or f"p. {c.page_start or 1}") if c else "General Overview"
+                first_sentence = (c.content.strip().split("\n")[0][:140] if c else f"Concepts in {topic or 'course material'}")
+                if q_type == "mcq":
+                    questions_raw.append({
+                        "question_type": "mcq",
+                        "difficulty": difficulty,
+                        "prompt": f"According to {doc_name} ({sec}), which statement is directly supported regarding: '{first_sentence}'?",
+                        "options": [
+                            f"A) {first_sentence}",
+                            "B) The described principles are not supported by the syllabus.",
+                            "C) This topic is deprecated and replaced by legacy systems.",
+                            "D) None of the above statements are supported by the text.",
+                        ],
+                        "expected_answer": "A",
+                        "explanation": f"Grounded directly in {doc_name}, {sec}: '{c.content[:200] if c else first_sentence}...'",
+                    })
+                elif q_type == "short_answer":
+                    questions_raw.append({
+                        "question_type": "short_answer",
+                        "difficulty": difficulty,
+                        "prompt": f"In {doc_name} ({sec}), what key concept or definition is established regarding: '{first_sentence}'?",
+                        "options": None,
+                        "expected_answer": first_sentence,
+                        "explanation": f"Grounded directly in {doc_name} ({sec}).",
+                    })
+                else:
+                    questions_raw.append({
+                        "question_type": "difficult",
+                        "difficulty": "hard",
+                        "prompt": f"Critically evaluate the architectural implications and principles presented in {doc_name} ({sec}) concerning: '{first_sentence}'.",
+                        "options": None,
+                        "expected_answer": c.content[:150] if c else first_sentence,
+                        "explanation": f"Grounded in detailed analysis from {doc_name}, {sec}.",
+                    })
 
         # 3. Save Quiz and Questions
         created_questions = []
@@ -833,9 +1107,9 @@ class StudyService:
                 "explanation": str(q_data.get("explanation", "")),
                 "source_citations": [
                     {
-                        "document_title": c.document_title,
+                        "document_title": getattr(c, "document_filename", getattr(c, "document_title", "Document")),
                         "page_start": c.page_start,
-                        "citation_label": c.citation_label,
+                        "citation_label": getattr(c, "citation_label", f"[{getattr(c, 'document_filename', 'Document')}, p. {c.page_start}]"),
                     }
                     for c in retrieved_chunks[:2]
                 ] if retrieved_chunks else [],

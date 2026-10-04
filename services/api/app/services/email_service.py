@@ -4,6 +4,7 @@ from email.mime.text import MIMEText
 import os
 import smtplib
 from typing import Any, Dict, Optional
+import httpx
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -32,17 +33,65 @@ class DeveloperAccessRequestPayload(BaseModel):
 
 class EmailDeliveryResult(BaseModel):
     success: bool
-    status: str  # "delivered" | "queued_manual_setup_required" | "failed"
+    status: str  # "delivered" | "unconfigured" | "failed"
     message: str
     timestamp: str
 
 
-def _send_smtp_email(subject: str, text_content: str, to_email: str = TARGET_NOTIFICATION_EMAIL) -> EmailDeliveryResult:
-    """
-    Dispatches a real email via server-side SMTP credentials configured in environment variables.
-    Does NOT expose credentials to the client or source control.
-    If SMTP credentials are not configured, records the message and returns the exact manual setup required.
-    """
+def _send_resend_email(
+    subject: str, text_content: str, to_email: str = TARGET_NOTIFICATION_EMAIL
+) -> Optional[EmailDeliveryResult]:
+    """Dispatches email via Resend API if RESEND_API_KEY is configured in the environment."""
+    resend_api_key = os.environ.get("RESEND_API_KEY") or getattr(settings, "RESEND_API_KEY", None)
+    if not resend_api_key:
+        return None
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    from_email = os.environ.get("RESEND_FROM_EMAIL", "StudySpace AI <onboarding@resend.dev>")
+    payload = {
+        "from": from_email,
+        "to": [to_email],
+        "subject": subject,
+        "text": text_content,
+    }
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {resend_api_key}",
+            "Content-Type": "application/json",
+        }
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post("https://api.resend.com/emails", json=payload, headers=headers)
+            if resp.status_code in (200, 201):
+                logger.info("Successfully delivered email via Resend to %s", to_email)
+                return EmailDeliveryResult(
+                    success=True,
+                    status="delivered",
+                    message=f"Email successfully delivered to {to_email} via Resend.",
+                    timestamp=now_iso,
+                )
+            else:
+                logger.error("Resend API rejected email: %d %s", resp.status_code, resp.text)
+                return EmailDeliveryResult(
+                    success=False,
+                    status="failed",
+                    message=f"Resend API error ({resp.status_code}): {resp.text}",
+                    timestamp=now_iso,
+                )
+    except Exception as exc:
+        logger.error("Resend delivery exception: %s", exc)
+        return EmailDeliveryResult(
+            success=False,
+            status="failed",
+            message=f"Resend transmission failed: {str(exc)}",
+            timestamp=now_iso,
+        )
+
+
+def _send_smtp_email(
+    subject: str, text_content: str, to_email: str = TARGET_NOTIFICATION_EMAIL
+) -> Optional[EmailDeliveryResult]:
+    """Dispatches email via SMTP if credentials are fully configured."""
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USERNAME", "")
@@ -50,24 +99,8 @@ def _send_smtp_email(subject: str, text_content: str, to_email: str = TARGET_NOT
     from_email = os.environ.get("SMTP_FROM_EMAIL", smtp_user or "notifications@studyspace.ai")
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Verify if SMTP provider credentials are fully configured
     if not smtp_host or not smtp_pass:
-        msg = (
-            f"SMTP credentials not configured in server environment. "
-            f"To enable direct delivery to {to_email}, configure SMTP_HOST, SMTP_PORT, "
-            f"SMTP_USERNAME, and SMTP_PASSWORD in .env."
-        )
-        logger.warning(
-            "Email notification recorded for %s, but SMTP is unconfigured. Content preview: %s",
-            to_email,
-            subject,
-        )
-        return EmailDeliveryResult(
-            success=True,
-            status="queued_manual_setup_required",
-            message=msg,
-            timestamp=now_iso,
-        )
+        return None
 
     try:
         msg = MIMEMultipart("alternative")
@@ -86,7 +119,7 @@ def _send_smtp_email(subject: str, text_content: str, to_email: str = TARGET_NOT
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(from_email, [to_email], msg.as_string())
 
-        logger.info("Successfully delivered email '%s' to %s", subject, to_email)
+        logger.info("Successfully delivered email '%s' via SMTP to %s", subject, to_email)
         return EmailDeliveryResult(
             success=True,
             status="delivered",
@@ -103,6 +136,38 @@ def _send_smtp_email(subject: str, text_content: str, to_email: str = TARGET_NOT
         )
 
 
+def dispatch_email(
+    subject: str, text_content: str, to_email: Optional[str] = None
+) -> EmailDeliveryResult:
+    """
+    Dispatches email notification using configured provider:
+    1. Resend API (preferred)
+    2. SMTP server
+    3. Truthful unconfigured error state (never pretends success)
+    """
+    target = to_email or os.environ.get("CONTACT_EMAIL", TARGET_NOTIFICATION_EMAIL)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # 1. Try Resend if configured
+    resend_res = _send_resend_email(subject, text_content, target)
+    if resend_res is not None:
+        return resend_res
+
+    # 2. Try SMTP if configured
+    smtp_res = _send_smtp_email(subject, text_content, target)
+    if smtp_res is not None:
+        return smtp_res
+
+    # 3. Neither configured: Truthful unconfigured error
+    logger.warning("Email provider not configured. Recorded inquiry for %s: %s", target, subject)
+    return EmailDeliveryResult(
+        success=False,
+        status="unconfigured",
+        message=f"Email delivery is not configured on the server. Please contact {target} directly.",
+        timestamp=now_iso,
+    )
+
+
 def send_contact_inquiry(payload: ContactInquiryPayload) -> EmailDeliveryResult:
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     subject = "StudySpace AI — New Contact Inquiry"
@@ -116,7 +181,7 @@ def send_contact_inquiry(payload: ContactInquiryPayload) -> EmailDeliveryResult:
         f"Message:\n{payload.message}\n"
         f"-----------------------------------------\n"
     )
-    return _send_smtp_email(subject=subject, text_content=body)
+    return dispatch_email(subject=subject, text_content=body)
 
 
 def send_developer_access_request(payload: DeveloperAccessRequestPayload) -> EmailDeliveryResult:
@@ -136,4 +201,4 @@ def send_developer_access_request(payload: DeveloperAccessRequestPayload) -> Ema
         f"Additional Details:\n{payload.additional_message or 'None'}\n"
         f"---------------------------------------------------\n"
     )
-    return _send_smtp_email(subject=subject, text_content=body)
+    return dispatch_email(subject=subject, text_content=body)

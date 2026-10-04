@@ -8,7 +8,7 @@ interface ProjectContextType {
   activeProject: Project | null;
   loading: boolean;
   refreshProjects: () => Promise<void>;
-  selectProject: (projectId: string | null) => void;
+  selectProject: (projectOrId: string | Project | null) => void;
   createNewProject: (input: ProjectCreateInput) => Promise<Project>;
   updateExistingProject: (projectId: string, input: ProjectUpdateInput) => Promise<Project>;
   deleteExistingProject: (projectId: string) => Promise<void>;
@@ -53,13 +53,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, user?.id]);
 
-  const selectProject = (projectId: string | null) => {
-    if (!projectId) {
+  const selectProject = (projectOrId: string | Project | null) => {
+    if (!projectOrId) {
       setActiveProject(null);
       return;
     }
-    const found = projects.find((p) => p.id === projectId);
-    setActiveProject(found || null);
+    if (typeof projectOrId === "object") {
+      setActiveProject(projectOrId);
+      return;
+    }
+    const found = projects.find((p) => p.id === projectOrId);
+    if (found) {
+      setActiveProject(found);
+    }
   };
 
   const createNewProject = async (input: ProjectCreateInput): Promise<Project> => {

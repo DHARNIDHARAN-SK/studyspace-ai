@@ -82,6 +82,10 @@ class ChatQueryResponse(BaseModel):
     metrics: Dict[str, Any]
 
 
+class ConversationCreateRequest(BaseModel):
+    title: Optional[str] = Field("New Chat", description="Optional conversation title")
+
+
 class ConversationItem(BaseModel):
     id: str
     workspace_id: str
@@ -163,6 +167,30 @@ async def chat_with_project_rag(
         decomposition_enabled=payload.decomposition_enabled,
     )
     return ChatQueryResponse(**result)
+
+
+@router.post(
+    "/projects/{project_id}/conversations",
+    response_model=ConversationItem,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new persisted conversation in a project",
+)
+async def create_project_conversation(
+    project_id: str,
+    payload: Optional[ConversationCreateRequest] = None,
+    current_user: Any = Depends(get_current_user),
+) -> ConversationItem:
+    workspace_id = _to_uuid(getattr(current_user, "workspace_id", None) or current_user["workspace_id"])
+    user_id = _to_uuid(getattr(current_user, "id", None) or current_user["user_id"])
+    proj_uuid = _to_uuid(project_id)
+    title = payload.title if payload and payload.title else "New Chat"
+    conv = await chat_service.create_conversation(
+        workspace_id=workspace_id,
+        project_id=proj_uuid,
+        user_id=user_id,
+        title=title,
+    )
+    return ConversationItem(**conv)
 
 
 @router.get(

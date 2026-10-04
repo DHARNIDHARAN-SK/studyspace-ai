@@ -19,6 +19,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
 import { useAuth } from "../auth/AuthContext";
 import {
+  createConversation,
   getConversationMessages,
   listConversations,
   previewQueryRewrite,
@@ -40,6 +41,8 @@ export function ChatTab({ project }: ChatTabProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isCreatingConv, setIsCreatingConv] = useState(false);
+  const composerInputRef = React.useRef<HTMLTextAreaElement>(null);
 
   const [inputQuery, setInputQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -153,6 +156,10 @@ export function ChatTab({ project }: ChatTabProps) {
       }
 
       setMessages((prev) => [...prev, resp.message]);
+      const currentConv = conversations.find((c) => c.id === resp.conversation_id);
+      if (!currentConv || currentConv.title === "New Chat" || currentConv.title === "New Conversation") {
+        await fetchConversations(false);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to execute academic query.";
       setChatError(msg);
@@ -192,11 +199,25 @@ export function ChatTab({ project }: ChatTabProps) {
     }
   };
 
-  const handleNewChat = () => {
-    setActiveConvId("");
-    setMessages([]);
+  const handleNewChat = async () => {
+    if (!token || !project.id || isCreatingConv) return;
+    setIsCreatingConv(true);
     setChatError(null);
     setRewritePreview(null);
+    try {
+      const newConv = await createConversation(token, project.id, "New Chat");
+      setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== newConv.id)]);
+      setActiveConvId(newConv.id);
+      setMessages([]);
+      setTimeout(() => {
+        composerInputRef.current?.focus();
+      }, 50);
+    } catch (err: unknown) {
+      console.error("Failed to create new conversation:", err);
+      setChatError(err instanceof Error ? err.message : "Failed to create new chat.");
+    } finally {
+      setIsCreatingConv(false);
+    }
   };
 
   const handleRename = (id: string, newTitle: string) => {
@@ -246,6 +267,7 @@ export function ChatTab({ project }: ChatTabProps) {
         onRename={handleRename}
         onDelete={handleDelete}
         onTogglePin={handleTogglePin}
+        isCreating={isCreatingConv}
       />
 
       {/* Main Chat Workspace */}
@@ -482,6 +504,7 @@ export function ChatTab({ project }: ChatTabProps) {
         <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 bg-slate-50/50">
           <div className="flex items-end gap-2 bg-white border border-slate-300 rounded-xl p-2 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-600">
             <textarea
+              ref={composerInputRef}
               rows={2}
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}

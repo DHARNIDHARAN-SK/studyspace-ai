@@ -29,7 +29,7 @@ export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { updateExistingProject, deleteExistingProject } = useProjects();
+  const { updateExistingProject, deleteExistingProject, selectProject } = useProjects();
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -57,6 +57,7 @@ export function ProjectPage() {
       .then((p) => {
         if (isMounted) {
           setProject(p);
+          selectProject(p);
           setEditName(p.name);
           setEditDesc(p.description || "");
           setEditSubject(p.subject || "");

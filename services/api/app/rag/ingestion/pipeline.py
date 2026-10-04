@@ -29,7 +29,7 @@ async def run_document_ingestion(
     project_id: uuid.UUID | str,
     job_id: Optional[uuid.UUID | str] = None,
     storage_provider: Optional[Any] = None,
-    generate_embeddings: bool = False,
+    generate_embeddings: bool = True,
 ) -> Dict[str, Any]:
     """
     Executes the complete document ingestion pipeline:
@@ -193,8 +193,22 @@ async def run_document_ingestion(
         )
         raise IngestionError(f"Chunking failed for {filename}: {str(exc)}")
 
-    # 7. Persist chunks and update document/job state idempotently
-    duration = time.time() - start_time
+    # Invariant: An indexed/searchable document MUST have chunk_count > 0
+    if not raw_chunks or len(raw_chunks) == 0:
+        err_msg = (
+            f"Document parsing produced 0 extractable text chunks. "
+            f"{'The PDF appears scanned or image-only without an OCR text layer.' if parsed_doc.is_scanned else 'The document contains no readable text content.'}"
+        )
+        logger.warning("Ingestion rejected document %s (%s): %s", doc_uuid, filename, err_msg)
+        await _record_failure(
+            doc_uuid,
+            job_uuid,
+            error_code="NO_EXTRACTABLE_TEXT",
+            error_message=err_msg,
+        )
+        raise IngestionError(err_msg, code="NO_EXTRACTABLE_TEXT", status_code=422)
+
+    # 7. Persist chunks atomically
     async with session_factory() as session:
         async with session.begin():
             # Idempotency: delete any existing chunks for this document & version
@@ -228,7 +242,38 @@ async def run_document_ingestion(
             ]
             session.add_all(db_chunks)
 
-            # Update Document record to 'indexed' (or 'ready')
+            # Mark stage as embedding
+            doc_res = await session.execute(select(Document).where(Document.id == doc_uuid))
+            doc = doc_res.scalar_one()
+            doc.ingestion_status = "embedding"
+            if job_uuid:
+                j_res = await session.execute(select(IngestionJob).where(IngestionJob.id == job_uuid))
+                j = j_res.scalar_one_or_none()
+                if j:
+                    j.stage = "embedding"
+
+    # 8. Generate and persist embeddings BEFORE marking as indexed
+    embedded_count = 0
+    if generate_embeddings:
+        try:
+            from app.rag.embeddings.service import ChunkEmbeddingService
+            embed_service = ChunkEmbeddingService()
+            embedded_count = await embed_service.embed_document_chunks(document_id=doc_uuid)
+            logger.info("Embedded %d chunks for document %s", embedded_count, doc_uuid)
+        except Exception as embed_err:
+            logger.error("Embedding generation failed for document %s: %s", doc_uuid, embed_err)
+            await _record_failure(
+                doc_uuid,
+                job_uuid,
+                error_code="EMBEDDING_FAILED",
+                error_message=f"Failed to generate vector embeddings: {str(embed_err)}",
+            )
+            raise IngestionError(f"Embedding generation failed: {str(embed_err)}", code="EMBEDDING_FAILED")
+
+    # 9. Mark document as indexed only after chunking + embeddings succeed
+    duration = time.time() - start_time
+    async with session_factory() as session:
+        async with session.begin():
             doc_res = await session.execute(select(Document).where(Document.id == doc_uuid))
             doc = doc_res.scalar_one()
             doc.ingestion_status = "indexed"
@@ -252,17 +297,20 @@ async def run_document_ingestion(
                     j.error_message = None
                     j.progress_metadata = {
                         "chunk_count": len(raw_chunks),
+                        "embedded_count": embedded_count,
                         "page_count": doc.page_count,
                         "parser": parser.parser_name,
                         "is_scanned": parsed_doc.is_scanned,
                         "duration_seconds": round(duration, 3),
                     }
 
-    embedded_count = 0
-    if generate_embeddings:
-        from app.rag.embeddings.service import ChunkEmbeddingService
-        embed_service = ChunkEmbeddingService()
-        embedded_count = await embed_service.embed_document_chunks(document_id=doc_uuid)
+    # 10. Invalidate project semantic cache on successful document index
+    try:
+        from app.rag.cache.redis_cache import RedisSemanticCache
+        cache = RedisSemanticCache()
+        await cache.invalidate_project_cache(workspace_id=ws_uuid, project_id=proj_uuid)
+    except Exception as cache_err:
+        logger.debug("Project semantic cache invalidation skipped: %s", cache_err)
 
     logger.info(
         "Successfully completed ingestion for document_id=%s: %d chunks created, %d embedded in %.2fs",

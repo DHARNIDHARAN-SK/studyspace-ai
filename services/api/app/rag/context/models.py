@@ -17,6 +17,10 @@ class CitationSource:
     citation_label: str
     snippet: str
 
+    @property
+    def document_title(self) -> str:
+        return self.document_filename
+
 
 @dataclass
 class BuildContextResult:
@@ -24,3 +28,7 @@ class BuildContextResult:
     context_text: str
     citations: List[CitationSource]
     total_chars: int
+
+    @property
+    def text(self) -> str:
+        return self.context_text

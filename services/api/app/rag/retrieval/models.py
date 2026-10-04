@@ -33,3 +33,11 @@ class RetrievedChunk:
     rrf_score: Optional[float] = None
     rerank_score: Optional[float] = None
     retrieval_method: str = "dense"  # "dense" | "lexical" | "hybrid" | "reranked"
+
+    @property
+    def document_title(self) -> str:
+        return self.document_filename
+
+    @property
+    def citation_label(self) -> str:
+        return f"[{self.document_filename}, p. {self.page_start}]" if self.page_start else f"[{self.document_filename}]"

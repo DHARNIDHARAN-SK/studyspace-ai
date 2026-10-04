@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckSquare, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CheckSquare, Loader2, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { useAuth } from "../auth/AuthContext";
 import {
   createRevisionItem,
   deleteRevisionItem,
+  generateRevisionTopics,
   listRevisionItems,
   updateRevisionItem,
   type RevisionProgressStats,
@@ -27,6 +28,7 @@ export function RevisionTab({ project }: RevisionTabProps) {
     completion_percentage: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<"all" | RevisionStatus>("all");
@@ -34,6 +36,21 @@ export function RevisionTab({ project }: RevisionTabProps) {
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleGenerateTopics = async () => {
+    if (!token || !project.id || isGenerating) return;
+    try {
+      setIsGenerating(true);
+      setError(null);
+      const res = await generateRevisionTopics(token, project.id);
+      setItems(res.items);
+      setStats(res.stats);
+    } catch (err: any) {
+      setError(err?.message || "Failed to generate revision topics from course materials.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const fetchItems = useCallback(async () => {
     if (!token) return;
@@ -139,6 +156,21 @@ export function RevisionTab({ project }: RevisionTabProps) {
 
         <div className="flex items-center space-x-2">
           <Button
+            onClick={handleGenerateTopics}
+            disabled={isGenerating}
+            variant="outline"
+            size="sm"
+            leftIcon={
+              isGenerating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              )
+            }
+          >
+            {isGenerating ? "Analyzing Course..." : "Generate Topics"}
+          </Button>
+          <Button
             onClick={() => fetchItems()}
             variant="outline"
             size="sm"
@@ -194,8 +226,26 @@ export function RevisionTab({ project }: RevisionTabProps) {
             <span>Loading revision topics...</span>
           </div>
         ) : filteredItems.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">
-            No revision topics in this category.
+          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500 space-y-3">
+            <p>No revision topics found for this filter.</p>
+            {items.length === 0 && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  onClick={handleGenerateTopics}
+                  disabled={isGenerating}
+                  size="sm"
+                  leftIcon={
+                    isGenerating ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-white" />
+                    )
+                  }
+                >
+                  {isGenerating ? "Analyzing Course Materials..." : "Auto-Generate from Course Materials"}
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           filteredItems.map((item) => (

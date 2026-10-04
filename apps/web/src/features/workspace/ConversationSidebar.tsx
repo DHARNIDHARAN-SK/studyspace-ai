@@ -18,6 +18,7 @@ interface ConversationSidebarProps {
   onRename: (id: string, newTitle: string) => void;
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
+  isCreating?: boolean;
 }
 
 export function ConversationSidebar({
@@ -28,6 +29,7 @@ export function ConversationSidebar({
   onRename,
   onDelete,
   onTogglePin,
+  isCreating = false,
 }: ConversationSidebarProps) {
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,12 +62,19 @@ export function ConversationSidebar({
       <div className="p-3 border-b border-slate-200">
         <Button
           onClick={onNewChat}
+          disabled={isCreating}
           size="sm"
-          variant={!activeId ? "primary" : "outline"}
-          className="w-full"
-          leftIcon={<Plus className="w-3.5 h-3.5" />}
+          variant="outline"
+          className="w-full font-semibold"
+          leftIcon={
+            isCreating ? (
+              <span className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Plus className="w-3.5 h-3.5" />
+            )
+          }
         >
-          New Chat
+          {isCreating ? "Creating..." : "New Chat"}
         </Button>
       </div>
 

@@ -116,6 +116,7 @@ async def test_real_cloud_computing_pdf_controlled_ingestion():
         project_id=proj_id,
         job_id=job_id,
         storage_provider=storage_provider,
+        generate_embeddings=False,
     )
     duration = time.time() - start_time
 
@@ -176,6 +177,7 @@ async def test_real_cloud_computing_pdf_controlled_ingestion():
         project_id=proj_id,
         job_id=job_id,
         storage_provider=storage_provider,
+        generate_embeddings=False,
     )
     assert re_result["status"] == "indexed"
 

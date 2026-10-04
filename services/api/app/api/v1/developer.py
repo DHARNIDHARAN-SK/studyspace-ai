@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.api_key_auth import ApiKeyContext, get_api_key
 from app.core.auth import AuthenticatedUser, get_current_user
+from app.core.errors import AppError
 from app.db.session import get_db_optional
 from app.schemas.developer import (
     ApiKeyCreateRequest,
@@ -39,9 +40,23 @@ async def submit_developer_request(
 ) -> EmailDeliveryResult:
     """
     Submits a professional Developer API access request.
-    Validates required intake fields and notifies karnan284858@gmail.com before API key issuance.
+    Validates required intake fields and notifies configured recipient before API key issuance.
     """
-    return send_developer_access_request(payload)
+    result = send_developer_access_request(payload)
+    if not result.success:
+        if result.status == "unconfigured":
+            raise AppError(
+                code="EMAIL_SERVICE_UNCONFIGURED",
+                message=result.message,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        else:
+            raise AppError(
+                code="EMAIL_DELIVERY_FAILED",
+                message=result.message,
+                status_code=status.HTTP_502_BAD_GATEWAY,
+            )
+    return result
 
 
 @developer_router.post("/keys", response_model=ApiKeyCreatedResponse, status_code=status.HTTP_201_CREATED)

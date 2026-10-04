@@ -315,3 +315,27 @@ unner):** Executes queries systematically across:
   - Dynamic effort levels (`simple` -> Baseline dense RAG, `medium` -> Advanced hybrid RAG with RRF & local reranking, `hard` -> Conversational RAG with multi-query expansion and semantic cache) selectable via UI dropdown.
   - Interactive Query Formulation Preview (`POST /api/v1/projects/{project_id}/chat/rewrite`) lets students inspect or accept LLM-reformulated queries prior to search execution.
 - **Consequences:** Eliminates unnecessary inference cost, guarantees zero false citations on conversational greetings, and provides student control over retrieval depth.
+
+---
+
+## ADR-029: Scanned PDF OCR Fallback Pipeline & Zero-Chunk Ingestion Invariant
+- **Date:** 2026-10-04
+- **Context:** Ingestion of scanned or image-based PDFs (e.g. `BIG DATA ANALYTICS NOTES.pdf`) produced 0 extractable characters via standard `pypdf`, yet the document was erroneously marked `indexed` with `0 chunks`. Additionally, WinRT OCR (`winocr.recognize_pil_sync`) internally called `asyncio.run()`, raising `RuntimeError: asyncio.run() cannot be called from a running event loop` when invoked from within FastAPI's async context.
+- **Decision:**
+  1. **OCR Thread Isolation:** Implemented worker function `_ocr_page_worker` running outside the main asyncio loop using `concurrent.futures.ThreadPoolExecutor(max_workers=4)`. Windows Media OCR successfully extracts text across all pages in parallel without loop collision.
+  2. **Scanned PDF Heuristic:** If standard `pypdf` extraction yields `< 20` non-whitespace characters per page, the parser automatically falls back to rendering page images at 150 DPI and executing OCR.
+  3. **Zero-Chunk Ingestion Invariant:** In `services/api/app/rag/ingestion/pipeline.py`, if chunking produces 0 chunks, the ingestion job and document status are immediately transitioned to `failed` with error code `NO_EXTRACTABLE_TEXT`. A document is NEVER marked `indexed` unless `chunk_count > 0` and embeddings are successfully persisted in pgvector.
+- **Consequences:** Scanned academic lecture notes and photocopied textbooks are fully readable, searchable, and chunked with real embeddings. Invalid `0 chunks + Indexed` states are completely eliminated.
+
+---
+
+## ADR-030: Explicit Persisted Conversation Creation & Dynamic Project Grounding
+- **Date:** 2026-10-04
+- **Context:** The frontend "+ New Chat" button previously performed only a client-side state reset (`activeConversationId = null`), resulting in no persisted conversation record in PostgreSQL, ungrounded conversations, and project selection display desynchronization in the UI sidebar/header. Furthermore, study feature generation contained hardcoded Cloud Computing fallbacks when querying unrelated projects.
+- **Decision:**
+  1. **Explicit Persisted Conversation Route:** Implemented `POST /api/v1/projects/{project_id}/conversations` with multi-tenant and workspace authorization checks. Creates a genuine database record (`Conversation`) with unique UUID, status `active`, and default title `"New Chat"`.
+  2. **Auto-Renaming Lifecycle:** On receiving the first user message, `ChatService.handle_chat_query` automatically renames the conversation title from `"New Chat"` to the initial user query (`clean_query[:50].strip()`).
+  3. **Atomic Frontend Transition:** The "+ New Chat" click handler asynchronously calls `createConversation(token, projectId)`, immediately updates the conversation list state, selects the newly minted ID, clears the message viewport, renders empty-state starter prompts, focuses the composer, and disables the button during in-flight creation to prevent duplicates.
+  4. **Dynamic Project Grounding:** Removed all static/seeded Cloud Computing mock data from `study_service.py` and prompts. All quizzes, study guides, and revision checklists strictly ground on the active project's pgvector chunks. If a project has no documents, the service dynamically synthesizes content using the user-specified topic via LLM rather than serving canned test data.
+- **Consequences:** Real end-to-end conversation persistence, persistent history navigation, zero static test data leaks across unrelated projects, and fully grounded study generation.
+
