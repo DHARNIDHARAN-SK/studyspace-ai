@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import Any, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,15 @@ from app.services.storage import (
 )
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["Documents"])
+
+
+def _to_uuid(val: Any) -> uuid.UUID:
+    if isinstance(val, uuid.UUID):
+        return val
+    try:
+        return uuid.UUID(str(val))
+    except ValueError:
+        return uuid.uuid5(uuid.NAMESPACE_DNS, str(val))
 
 
 def get_storage_provider() -> LocalStorageProvider:
@@ -69,15 +78,13 @@ async def upload_document(
     Asynchronously uploads and enqueues a course document for parsing and chunking.
     Enforces the 500-page requirement by returning immediately with a queued job ID.
     """
-    user_uuid = uuid.UUID(current_user.id)
-    ws_uuid = uuid.UUID(current_user.workspace_id)
-    try:
-        proj_uuid = uuid.UUID(project_id)
-    except ValueError:
-        raise AppError("Invalid project ID format.", code="INVALID_PROJECT_ID", status_code=400)
+    user_uuid = _to_uuid(current_user.id)
+    ws_uuid = _to_uuid(current_user.workspace_id)
+    proj_uuid = _to_uuid(project_id)
 
     # 1. Authorize workspace and project ownership
-    await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
+    project = await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
+    resolved_ws_uuid = project.workspace_id
 
     # 2. Read and validate file content
     file_bytes = await file.read()
@@ -115,7 +122,7 @@ async def upload_document(
 
     # 4. Generate canonical storage path & store file
     doc_uuid = uuid.uuid4()
-    storage_path = build_document_storage_path(ws_uuid, proj_uuid, doc_uuid, safe_name)
+    storage_path = build_document_storage_path(resolved_ws_uuid, proj_uuid, doc_uuid, safe_name)
     storage_provider = get_storage_provider()
 
     await storage_provider.put_object(
@@ -128,7 +135,7 @@ async def upload_document(
     # 5. Insert Document and IngestionJob records
     document = Document(
         id=doc_uuid,
-        workspace_id=ws_uuid,
+        workspace_id=resolved_ws_uuid,
         project_id=proj_uuid,
         uploaded_by_user_id=user_uuid,
         original_filename=safe_name,
@@ -162,7 +169,7 @@ async def upload_document(
         from app.workers.tasks import ingest_document_task
         ingest_document_task.delay(
             str(doc_uuid),
-            str(ws_uuid),
+            str(resolved_ws_uuid),
             str(proj_uuid),
             str(job_uuid),
         )
@@ -178,7 +185,7 @@ async def upload_document(
         background_tasks.add_task(
             run_document_ingestion,
             document_id=doc_uuid,
-            workspace_id=ws_uuid,
+            workspace_id=resolved_ws_uuid,
             project_id=proj_uuid,
             job_id=job_uuid,
         )
@@ -198,15 +205,12 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
 ) -> DocumentListResponse:
     """Lists all active documents for the authorized project."""
-    ws_uuid = uuid.UUID(current_user.workspace_id)
-    user_uuid = uuid.UUID(current_user.id)
-    try:
-        proj_uuid = uuid.UUID(project_id)
-    except ValueError:
-        raise AppError("Invalid project ID format.", code="INVALID_PROJECT_ID", status_code=400)
+    ws_uuid = _to_uuid(current_user.workspace_id)
+    user_uuid = _to_uuid(current_user.id)
+    proj_uuid = _to_uuid(project_id)
 
-    await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
-    rows = await list_project_documents(db, ws_uuid, proj_uuid)
+    project = await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
+    rows = await list_project_documents(db, project.workspace_id, proj_uuid)
 
     docs = [_to_document_response(doc, chunk_count) for doc, chunk_count in rows]
     return DocumentListResponse(documents=docs, total=len(docs))
@@ -220,14 +224,13 @@ async def get_document(
     db: AsyncSession = Depends(get_db),
 ) -> DocumentResponse:
     """Retrieves metadata and ingestion status for a specific document."""
-    ws_uuid = uuid.UUID(current_user.workspace_id)
-    try:
-        proj_uuid = uuid.UUID(project_id)
-        doc_uuid = uuid.UUID(document_id)
-    except ValueError:
-        raise AppError("Invalid ID format.", code="INVALID_ID_FORMAT", status_code=400)
+    ws_uuid = _to_uuid(current_user.workspace_id)
+    user_uuid = _to_uuid(current_user.id)
+    proj_uuid = _to_uuid(project_id)
+    doc_uuid = _to_uuid(document_id)
 
-    doc = await get_project_document(db, ws_uuid, proj_uuid, doc_uuid)
+    project = await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
+    doc = await get_project_document(db, project.workspace_id, proj_uuid, doc_uuid)
     return _to_document_response(doc)
 
 
@@ -240,14 +243,14 @@ async def retry_document_ingestion(
     db: AsyncSession = Depends(get_db),
 ) -> DocumentResponse:
     """Retries ingestion for a document that previously failed."""
-    ws_uuid = uuid.UUID(current_user.workspace_id)
-    try:
-        proj_uuid = uuid.UUID(project_id)
-        doc_uuid = uuid.UUID(document_id)
-    except ValueError:
-        raise AppError("Invalid ID format.", code="INVALID_ID_FORMAT", status_code=400)
+    ws_uuid = _to_uuid(current_user.workspace_id)
+    user_uuid = _to_uuid(current_user.id)
+    proj_uuid = _to_uuid(project_id)
+    doc_uuid = _to_uuid(document_id)
 
-    doc = await get_project_document(db, ws_uuid, proj_uuid, doc_uuid)
+    project = await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
+    resolved_ws_uuid = project.workspace_id
+    doc = await get_project_document(db, resolved_ws_uuid, proj_uuid, doc_uuid)
 
     # Reset document status
     doc.ingestion_status = "queued"
@@ -271,7 +274,7 @@ async def retry_document_ingestion(
     dispatched = False
     try:
         from app.workers.tasks import ingest_document_task
-        ingest_document_task.delay(str(doc_uuid), str(ws_uuid), str(proj_uuid), str(job_uuid))
+        ingest_document_task.delay(str(doc_uuid), str(resolved_ws_uuid), str(proj_uuid), str(job_uuid))
         dispatched = True
     except Exception:
         pass
@@ -280,7 +283,7 @@ async def retry_document_ingestion(
         background_tasks.add_task(
             run_document_ingestion,
             document_id=doc_uuid,
-            workspace_id=ws_uuid,
+            workspace_id=resolved_ws_uuid,
             project_id=proj_uuid,
             job_id=job_uuid,
         )
@@ -296,14 +299,13 @@ async def delete_document(
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-deletes a document and its storage payload."""
-    ws_uuid = uuid.UUID(current_user.workspace_id)
-    try:
-        proj_uuid = uuid.UUID(project_id)
-        doc_uuid = uuid.UUID(document_id)
-    except ValueError:
-        raise AppError("Invalid ID format.", code="INVALID_ID_FORMAT", status_code=400)
+    ws_uuid = _to_uuid(current_user.workspace_id)
+    user_uuid = _to_uuid(current_user.id)
+    proj_uuid = _to_uuid(project_id)
+    doc_uuid = _to_uuid(document_id)
 
-    doc = await get_project_document(db, ws_uuid, proj_uuid, doc_uuid)
+    project = await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
+    doc = await get_project_document(db, project.workspace_id, proj_uuid, doc_uuid)
 
     from datetime import datetime, timezone
     doc.deleted_at = datetime.now(timezone.utc)

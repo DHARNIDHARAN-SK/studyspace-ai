@@ -1,3 +1,4 @@
+import uuid
 import pytest
 from httpx import ASGITransport, AsyncClient
 from app.db.repository import store
@@ -14,8 +15,9 @@ def clean_store():
 
 @pytest.mark.asyncio
 async def test_project_crud_and_multi_tenant_isolation():
-    token_a = create_test_token("user-a-111", "user.a@studyspace.ai")
-    token_b = create_test_token("user-b-222", "user.b@studyspace.ai")
+    u_suffix = uuid.uuid4().hex[:8]
+    token_a = create_test_token(f"user-a-{u_suffix}", f"user.a.{u_suffix}@studyspace.ai")
+    token_b = create_test_token(f"user-b-{u_suffix}", f"user.b.{u_suffix}@studyspace.ai")
 
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}

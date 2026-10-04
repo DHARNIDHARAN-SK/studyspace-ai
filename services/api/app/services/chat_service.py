@@ -7,9 +7,11 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.errors import AppError, NotFoundError, ForbiddenError
+from app.db.documents import ensure_tenant_hierarchy
 from app.db.models import Conversation, Document, DocumentChunk, Message, MessageCitation, Project, Workspace
 from app.db.session import get_session_factory
 from app.rag.conversation.context_manager import ConversationContextManager, ConversationTurn
+from app.rag.conversation.intent import classify_conversation_intent, generate_casual_response
 from app.rag.pipeline import (
     AdvancedRAGPipeline,
     AdvancedRAGResult,
@@ -102,8 +104,21 @@ class ChatService:
         Pre-flight rewrite preview allowing the student to inspect or edit the reformulated query
         before submitting retrieval.
         """
+        clean_q = query.strip()
+        # Fast intent check: casual queries never require search rewrites
+        intent_check = classify_conversation_intent(clean_q)
+        if intent_check.intent == "casual":
+            return {
+                "original_query": clean_q,
+                "rewritten_query": clean_q,
+                "was_rewritten": False,
+                "latency_ms": 1,
+                "reason": "Casual conversation does not require document query rewriting.",
+            }
+
         session_factory = get_session_factory()
         async with session_factory() as session:
+            await ensure_tenant_hierarchy(session, user_id=user_id, workspace_id=workspace_id, project_id=project_id)
             proj_stmt = select(Project).where(
                 Project.id == project_id,
                 Project.workspace_id == workspace_id,
@@ -121,8 +136,21 @@ class ChatService:
                     limit=settings.RAG_CONVERSATION_HISTORY_LIMIT,
                 )
 
+            # Check if query is already standalone without ambiguous pronouns
+            pronoun_pattern = r"\b(it|its|they|them|their|this|that|these|those)\b"
+            import re
+            has_pronouns = bool(re.search(pronoun_pattern, clean_q, re.IGNORECASE))
+            if not has_pronouns or not history:
+                return {
+                    "original_query": clean_q,
+                    "rewritten_query": clean_q,
+                    "was_rewritten": False,
+                    "latency_ms": 1,
+                    "reason": "Query is already standalone and specific.",
+                }
+
             rw_res: RewrittenQueryResult = await self.transformation_service.rewrite_query(
-                query=query.strip(),
+                query=clean_q,
                 history=history,
             )
 
@@ -143,6 +171,7 @@ class ChatService:
         conversation_id: Optional[uuid.UUID] = None,
         top_k: int = settings.RAG_DEFAULT_TOP_K,
         document_ids: Optional[List[uuid.UUID]] = None,
+        effort: Optional[str] = None,
         retrieval_mode: Optional[str] = None,
         rewrite_enabled: Optional[bool] = None,
         selected_query: Optional[str] = None,
@@ -153,11 +182,26 @@ class ChatService:
         """
         Executes baseline, advanced hybrid, or conversational RAG pipeline
         and persists messages & citations to PostgreSQL.
+        Strictly distinguishes casual conversation from document/study queries.
+        Maps dynamic effort ('simple', 'medium', 'hard') to appropriate retrieval pipelines.
         """
-        active_mode = (retrieval_mode or settings.RAG_RETRIEVAL_MODE or "advanced").lower().strip()
+        clean_query = query.strip()
+        effort_key = (effort or "").lower().strip()
+        if effort_key == "simple":
+            active_mode = "baseline"
+        elif effort_key == "medium":
+            active_mode = "advanced"
+        elif effort_key == "hard":
+            active_mode = "conversational"
+        else:
+            active_mode = (retrieval_mode or settings.RAG_RETRIEVAL_MODE or "advanced").lower().strip()
+
+        # Step 7: Strict Intent Determination BEFORE retrieval
+        classification = classify_conversation_intent(clean_query)
 
         session_factory = get_session_factory()
         async with session_factory() as session:
+            await ensure_tenant_hierarchy(session, user_id=user_id, workspace_id=workspace_id, project_id=project_id)
             # 1. Authorize project access
             proj_stmt = select(Project).where(
                 Project.id == project_id,
@@ -175,42 +219,131 @@ class ChatService:
                 project_id=project_id,
                 user_id=user_id,
                 conversation_id=conversation_id,
-                title=query[:40] if query else "New Chat",
+                title=clean_query[:40] if clean_query else "New Chat",
             )
 
-            # 3. Retrieve recent history for conversational mode before adding new user message
-            recent_history: List[ConversationTurn] = []
-            if active_mode == "conversational":
-                recent_history = await self.context_manager.get_recent_history(
-                    session=session,
+            # 3. Handle Casual Conversation (NO RAG)
+            if classification.intent == "casual":
+                casual_text = generate_casual_response(clean_query, classification)
+                user_msg = Message(
                     conversation_id=conv.id,
                     workspace_id=workspace_id,
-                    limit=settings.RAG_CONVERSATION_HISTORY_LIMIT,
+                    role="user",
+                    content=clean_query,
+                    original_user_query=clean_query,
                 )
+                session.add(user_msg)
+                await session.flush()
 
-            # 4. Persist User Message
+                assistant_msg = Message(
+                    conversation_id=conv.id,
+                    workspace_id=workspace_id,
+                    role="assistant",
+                    content=casual_text,
+                    provider="conversational_chat",
+                    model_id=settings.OLLAMA_CHAT_MODEL,
+                    token_usage={
+                        "prompt_tokens": len(clean_query.split()),
+                        "completion_tokens": len(casual_text.split()),
+                        "total_tokens": len(clean_query.split()) + len(casual_text.split()),
+                    },
+                    latency_ms=10,
+                    cache_hit=False,
+                    rag_metadata={
+                        "intent": "casual",
+                        "rag_retrieval": False,
+                        "effort": effort_key or "simple",
+                    },
+                )
+                session.add(assistant_msg)
+                conv.updated_at = utc_now()
+                await session.commit()
+
+                return {
+                    "conversation_id": str(conv.id),
+                    "message": {
+                        "id": str(assistant_msg.id),
+                        "conversation_id": str(conv.id),
+                        "role": "assistant",
+                        "content": casual_text,
+                        "citations": [],
+                        "created_at": assistant_msg.created_at.isoformat() if assistant_msg.created_at else utc_now().isoformat(),
+                        "latency_ms": 10,
+                        "model": settings.OLLAMA_CHAT_MODEL,
+                        "selected_query": None,
+                        "rewrite_enabled": False,
+                        "rewrite_accepted": None,
+                        "multi_query_enabled": False,
+                        "generated_queries": [],
+                        "cache_hit": False,
+                        "rag_metadata": {"intent": "casual", "rag_retrieval": False},
+                    },
+                    "metrics": {
+                        "total_latency_ms": 10,
+                        "retrieval_latency_ms": 0,
+                        "generation_latency_ms": 10,
+                        "intent": "casual",
+                        "rag_retrieval": False,
+                    },
+                }
+
+            # 4. Determine effective search query for study/mixed queries
+            effective_query = clean_query
+            if classification.intent == "mixed" and classification.extracted_study_query:
+                effective_query = classification.extracted_study_query.strip()
+
+            if selected_query and rewrite_accepted:
+                effective_query = selected_query.strip()
+            elif rewrite_accepted is False:
+                effective_query = clean_query
+
+            # 5. Retrieve recent history for conversational context & pronoun resolution
+            recent_history: List[ConversationTurn] = []
+            recent_history = await self.context_manager.get_recent_history(
+                session=session,
+                conversation_id=conv.id,
+                workspace_id=workspace_id,
+                limit=settings.RAG_CONVERSATION_HISTORY_LIMIT,
+            )
+
+            # Step 11: Follow-up question pronoun resolution across efforts
+            import re
+            has_pronouns = bool(re.search(r"\b(it|its|they|them|their|this|that|these|those)\b", effective_query, re.IGNORECASE))
+            if has_pronouns and recent_history and not selected_query:
+                try:
+                    resolved = await self.transformation_service.rewrite_query(effective_query, recent_history)
+                    if resolved.was_rewritten and resolved.rewritten_query:
+                        effective_query = resolved.rewritten_query
+                except Exception as err:
+                    logger.debug("Automatic follow-up pronoun rewrite skipped: %s", err)
+
+            # 6. Persist User Message
             user_msg = Message(
                 conversation_id=conv.id,
                 workspace_id=workspace_id,
                 role="user",
-                content=query.strip(),
-                original_user_query=query.strip(),
+                content=clean_query,
+                original_user_query=clean_query,
+                selected_query=effective_query if effective_query != clean_query else None,
+                rewrite_accepted=rewrite_accepted,
             )
             session.add(user_msg)
             await session.flush()
 
-            # 5. Execute Selected RAG Pipeline
+            # 7. Execute Selected RAG Pipeline based on dynamic effort
             if active_mode == "baseline":
+                # Effort = Simple (Phase 6 dense vector retrieval)
                 rag_result = await self.baseline_pipeline.execute(
-                    query=query.strip(),
+                    query=effective_query,
                     workspace_id=workspace_id,
                     project_id=project_id,
                     top_k=top_k,
                     document_ids=document_ids,
                 )
             elif active_mode == "advanced":
+                # Effort = Medium (Phase 7 advanced hybrid retrieval + RRF + local reranking)
                 rag_result = await self.advanced_pipeline.execute(
-                    query=query.strip(),
+                    query=effective_query,
                     workspace_id=workspace_id,
                     project_id=project_id,
                     dense_top_k=settings.RAG_DENSE_TOP_K,
@@ -219,13 +352,13 @@ class ChatService:
                     document_ids=document_ids,
                 )
             else:
-                # Conversational Mode (Phase 8)
+                # Effort = Hard (Phase 8 conversational multi-query + decomposition + cache)
                 rw_flag = rewrite_enabled if rewrite_enabled is not None else settings.RAG_QUERY_REWRITE_ENABLED
                 mq_flag = multi_query_enabled if multi_query_enabled is not None else settings.RAG_MULTI_QUERY_ENABLED
                 dc_flag = decomposition_enabled if decomposition_enabled is not None else settings.RAG_DECOMPOSITION_ENABLED
 
                 rag_result = await self.conversational_pipeline.execute(
-                    query=query.strip(),
+                    query=effective_query,
                     workspace_id=workspace_id,
                     project_id=project_id,
                     history=recent_history,
@@ -240,7 +373,7 @@ class ChatService:
                     document_ids=document_ids,
                 )
 
-                # Update User Message with Phase 8 metadata
+                # Update User Message with metadata
                 user_msg.selected_query = rag_result.selected_query
                 user_msg.rewrite_enabled = rag_result.rewrite_enabled
                 user_msg.rewrite_accepted = rag_result.rewrite_accepted
@@ -249,18 +382,28 @@ class ChatService:
                 user_msg.cache_hit = rag_result.cache_hit
                 user_msg.rag_metadata = rag_result.rag_metadata
 
-            # 6. Persist Assistant Message
+            # If mixed intent, prefix response with friendly acknowledgment
+            answer_text = rag_result.answer
+            if classification.intent == "mixed":
+                answer_text = f"Hello! Regarding your course materials:\n\n{answer_text}"
+
+            # 8. Persist Assistant Message
             assistant_msg = Message(
                 conversation_id=conv.id,
                 workspace_id=workspace_id,
                 role="assistant",
-                content=rag_result.answer,
+                content=answer_text,
                 provider=rag_result.provider,
                 model_id=rag_result.llm_model,
                 token_usage=rag_result.token_usage,
                 latency_ms=rag_result.total_latency_ms,
                 cache_hit=getattr(rag_result, "cache_hit", False),
-                rag_metadata=getattr(rag_result, "rag_metadata", {}),
+                rag_metadata={
+                    "intent": classification.intent,
+                    "effort": effort_key or ("simple" if active_mode == "baseline" else "hard" if active_mode == "conversational" else "medium"),
+                    "retrieval_mode": active_mode,
+                    **(getattr(rag_result, "rag_metadata", {}) or {}),
+                },
             )
             session.add(assistant_msg)
             await session.flush()

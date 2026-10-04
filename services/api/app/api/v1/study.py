@@ -159,6 +159,7 @@ async def add_revision_link(
 # 2. Study Guides
 # ==============================================================================
 @router.post("/guides", response_model=StudyGuideResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/guides/generate", response_model=StudyGuideResponse, status_code=status.HTTP_201_CREATED)
 async def generate_study_guide(
     project_id: str,
     body: StudyGuideGenerateRequest,
@@ -218,6 +219,7 @@ async def get_study_guide(
 # 3. Quizzes
 # ==============================================================================
 @router.post("/quizzes", response_model=QuizResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/quizzes/generate", response_model=QuizResponse, status_code=status.HTTP_201_CREATED)
 async def generate_quiz(
     project_id: str,
     body: QuizGenerateRequest,
@@ -277,6 +279,7 @@ async def get_quiz(
 
 
 @router.post("/quizzes/{quiz_id}/attempt", response_model=QuizAttemptResultResponse)
+@router.post("/quizzes/{quiz_id}/attempts", response_model=QuizAttemptResultResponse)
 async def submit_quiz_attempt(
     project_id: str,
     quiz_id: str,
@@ -290,12 +293,13 @@ async def submit_quiz_attempt(
     except ValueError:
         quiz_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"quiz-{quiz_id}")
 
+    items = body.responses or body.answers or []
     return await study_service.submit_quiz_attempt(
         user_id=user_uuid,
         workspace_id=ws_uuid,
         project_id=proj_uuid,
         quiz_id=quiz_uuid,
-        responses=body.responses,
+        responses=items,
         db=db,
     )
 

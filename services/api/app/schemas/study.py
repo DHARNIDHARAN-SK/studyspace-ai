@@ -157,7 +157,8 @@ class QuizSubmissionAnswer(BaseModel):
 
 
 class QuizSubmitRequest(BaseModel):
-    responses: List[QuizSubmissionAnswer]
+    responses: Optional[List[QuizSubmissionAnswer]] = None
+    answers: Optional[List[QuizSubmissionAnswer]] = None
 
 
 class QuestionResultResponse(BaseModel):

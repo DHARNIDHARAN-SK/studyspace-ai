@@ -6,7 +6,7 @@ import {
   Copy,
   ExternalLink,
   FileCheck2,
-  Layers,
+  HelpCircle,
   RefreshCw,
   Send,
   Sparkles,
@@ -48,10 +48,10 @@ export function ChatTab({ project }: ChatTabProps) {
   const [inspectingCitation, setInspectingCitation] = useState<Citation | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Phase 8 RAG Controls
-  const [retrievalMode, setRetrievalMode] = useState<"conversational" | "advanced" | "baseline">("conversational");
+  // Dynamic Effort System (Simple / Medium / Hard)
+  const [effort, setEffort] = useState<"simple" | "medium" | "hard">("medium");
   const [rewriteEnabled, setRewriteEnabled] = useState<boolean>(true);
-  const [multiQueryEnabled, setMultiQueryEnabled] = useState<boolean>(true);
+  const [showEffortHelpModal, setShowEffortHelpModal] = useState<boolean>(false);
 
   // Pre-flight rewrite preview state
   const [isPreviewingRewrite, setIsPreviewingRewrite] = useState(false);
@@ -140,21 +140,21 @@ export function ChatTab({ project }: ChatTabProps) {
         query: queryText.trim(),
         conversation_id: validConvId,
         top_k: 5,
-        mode: retrievalMode,
+        effort: effort,
         rewrite_enabled: rewriteEnabled,
         selected_query: overrideSelectedQuery,
         rewrite_accepted: rewriteAccepted,
-        multi_query_enabled: multiQueryEnabled,
+        multi_query_enabled: effort === "hard",
       });
 
       if (!validConvId && resp.conversation_id) {
         setActiveConvId(resp.conversation_id);
-        fetchConversations();
+        await fetchConversations(false);
       }
 
       setMessages((prev) => [...prev, resp.message]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to execute RAG query.";
+      const msg = err instanceof Error ? err.message : "Failed to execute academic query.";
       setChatError(msg);
     } finally {
       setIsSending(false);
@@ -177,7 +177,13 @@ export function ChatTab({ project }: ChatTabProps) {
         query: inputQuery.trim(),
         conversation_id: validConvId,
       });
-      setRewritePreview(preview);
+
+      if (!preview.was_rewritten) {
+        // Query is already specific/clear, execute directly
+        await executeSend(inputQuery.trim());
+      } else {
+        setRewritePreview(preview);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to preview rewrite.";
       setChatError(msg);
@@ -224,84 +230,82 @@ export function ChatTab({ project }: ChatTabProps) {
   };
 
   const starterPrompts = [
-    "Summarize the key cloud service models and their differences",
-    "Explain virtualization and hypervisors in cloud computing",
-    "What are its main security risks and mitigation strategies?",
+    `What are the core concepts covered in ${project.name}?`,
+    "Explain the primary architecture differences mentioned in the course documents.",
+    "Give me an exam-style summary of key definitions with citations.",
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col md:flex-row min-h-[580px]">
-      {/* Conversation Sidebar */}
+    <div className="flex flex-col md:flex-row h-[750px] bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden font-sans">
+      {/* Sidebar of Conversations */}
       <ConversationSidebar
         conversations={conversations}
-        activeId={activeConvId}
-        onSelect={setActiveConvId}
+        activeId={activeConvId || null}
+        onSelect={(id) => setActiveConvId(id)}
         onNewChat={handleNewChat}
         onRename={handleRename}
         onDelete={handleDelete}
         onTogglePin={handleTogglePin}
       />
 
-      {/* Main Chat Canvas */}
-      <div className="flex-1 flex flex-col justify-between bg-white font-sans">
-        {/* Chat Control Subheader */}
-        <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between text-xs gap-2">
-          <div className="flex items-center space-x-2 text-slate-500">
+      {/* Main Chat Workspace */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
+        {/* Chat Control Toolbar */}
+        <div className="p-3 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-2">
             <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
             <span>Scope: <strong className="text-slate-700">Course Materials</strong></span>
             <span className="text-slate-300">|</span>
-            <span className="text-slate-400">
-              Index: {retrievalMode === "conversational"
-                ? "Conversational RAG (Multi-Query + Redis Cache)"
-                : retrievalMode === "advanced"
-                ? "Hybrid Dense + Lexical (RRF + Cross-Encoder)"
-                : "pgvector HNSW (768d)"}
+            <span className="text-slate-500">
+              {effort === "simple" && "Fast Vector Search"}
+              {effort === "medium" && "Hybrid Dense + Lexical Search"}
+              {effort === "hard" && "Conversational Multi-Query Expansion"}
             </span>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {/* Mode Switcher */}
-            <select
-              value={retrievalMode}
-              onChange={(e) => setRetrievalMode(e.target.value as any)}
-              className="text-[11px] font-medium bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="conversational">Phase 8: Conversational RAG</option>
-              <option value="advanced">Phase 7: Advanced Hybrid</option>
-              <option value="baseline">Phase 6: Baseline Vector</option>
-            </select>
+          <div className="flex items-center space-x-3">
+            {/* Dynamic Effort Selector */}
+            <div className="flex items-center space-x-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Effort:
+              </label>
+              <select
+                value={effort}
+                onChange={(e) => setEffort(e.target.value as any)}
+                className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs"
+              >
+                <option value="simple">Simple</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowEffortHelpModal(true)}
+                className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5"
+                title="About Retrieval Effort Levels"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-            {/* Conversational Controls */}
-            {retrievalMode === "conversational" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setRewriteEnabled(!rewriteEnabled)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors flex items-center space-x-1 ${
-                    rewriteEnabled
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                      : "bg-slate-100 border-slate-200 text-slate-400 line-through"
-                  }`}
-                  title="Enable/disable contextual query rewriting"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Rewrite</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMultiQueryEnabled(!multiQueryEnabled)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors flex items-center space-x-1 ${
-                    multiQueryEnabled
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                      : "bg-slate-100 border-slate-200 text-slate-400 line-through"
-                  }`}
-                  title="Enable/disable multi-query parallel expansion"
-                >
-                  <Layers className="w-3 h-3" />
-                  <span>Multi-Query</span>
-                </button>
-              </>
-            )}
+            {/* Query Rewrite Toggle */}
+            <div className="flex items-center space-x-1.5 border-l border-slate-200 pl-3">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Rewrite:
+              </label>
+              <button
+                type="button"
+                onClick={() => setRewriteEnabled(!rewriteEnabled)}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors ${
+                  rewriteEnabled
+                    ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                    : "bg-slate-100 border-slate-200 text-slate-400"
+                }`}
+                title="Toggle conversational query rewriting"
+              >
+                {rewriteEnabled ? "ON" : "OFF"}
+              </button>
+            </div>
 
             <Badge variant="indigo" className="font-mono text-[10px]">
               phi4-mini
@@ -339,10 +343,10 @@ export function ChatTab({ project }: ChatTabProps) {
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Conversational RAG Study Session</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Ask follow-up questions, compare topics, and resolve pronouns seamlessly.
-                  Retrieval leverages multi-query hybrid search, Redis semantic caching, and real textbook citations.
+                <h3 className="text-sm font-bold text-slate-900">StudySpace AI Session</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Ask questions about your uploaded documents or chat naturally.
+                  Study queries use grounded citations, while casual questions are answered directly without retrieval.
                 </p>
               </div>
 
@@ -425,10 +429,10 @@ export function ChatTab({ project }: ChatTabProps) {
                         {m.cache_hit && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium space-x-1">
                             <Zap className="w-3 h-3 text-emerald-600" />
-                            <span>Semantic Cache Hit</span>
+                            <span>Cache Hit</span>
                           </span>
                         )}
-                        <span>{m.latency_ms ? `${m.latency_ms} ms` : "Grounded response"}</span>
+                        <span>{m.latency_ms ? `${m.latency_ms} ms` : "Response"}</span>
                         <span>•</span>
                         <span className="font-mono">{m.model || "phi4-mini:latest"}</span>
                       </div>
@@ -463,9 +467,11 @@ export function ChatTab({ project }: ChatTabProps) {
               <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-500 flex items-center space-x-2">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
                 <span>
-                  {retrievalMode === "conversational"
+                  {effort === "hard"
                     ? "Resolving context, executing multi-query retrieval & generating answer..."
-                    : "Executing hybrid retrieval & generating grounded answer with phi4-mini..."}
+                    : effort === "medium"
+                    ? "Executing hybrid retrieval & generating grounded answer..."
+                    : "Executing fast dense vector retrieval & generating grounded answer..."}
                 </span>
               </div>
             </div>
@@ -485,10 +491,10 @@ export function ChatTab({ project }: ChatTabProps) {
                   handleSendMessage(e);
                 }
               }}
-              placeholder={`Ask a question about ${project.name}... (Press Enter to send)`}
+              placeholder={`Ask a question or study topic about ${project.name}... (Press Enter to send)`}
               className="flex-1 text-xs border-0 focus:outline-none resize-none p-1 text-slate-800 placeholder-slate-400"
             />
-            {retrievalMode === "conversational" && rewriteEnabled && (
+            {rewriteEnabled && (
               <Button
                 type="button"
                 variant="outline"
@@ -527,7 +533,7 @@ export function ChatTab({ project }: ChatTabProps) {
         description="Inspect or choose how your question will be formulated for textbook retrieval."
       >
         {rewritePreview && (
-          <div className="space-y-4 text-xs">
+          <div className="space-y-4 text-xs font-sans">
             <div className="space-y-1">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
                 Original Query
@@ -541,7 +547,7 @@ export function ChatTab({ project }: ChatTabProps) {
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wide flex items-center space-x-1">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Proposed Standalone Query</span>
+                  <span>Suggested Search Query</span>
                 </span>
                 <span className="text-[10px] text-slate-400">
                   {rewritePreview.latency_ms} ms
@@ -585,6 +591,57 @@ export function ChatTab({ project }: ChatTabProps) {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* About Effort Help Modal */}
+      <Modal
+        isOpen={showEffortHelpModal}
+        onClose={() => setShowEffortHelpModal(false)}
+        title="About Retrieval Effort Levels"
+      >
+        <div className="space-y-4 text-xs font-sans text-slate-600 leading-relaxed">
+          <p>
+            StudySpace AI allows you to adjust the retrieval effort for every message. Conversation history is preserved across all effort levels:
+          </p>
+
+          <div className="space-y-3">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+              <div className="font-bold text-slate-900 flex items-center space-x-1.5">
+                <Badge variant="slate">Simple</Badge>
+                <span>Fast Retrieval</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Fast retrieval for straightforward questions. Uses pgvector HNSW dense vector search directly against course document chunks.
+              </p>
+            </div>
+
+            <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg">
+              <div className="font-bold text-slate-900 flex items-center space-x-1.5">
+                <Badge variant="indigo">Medium</Badge>
+                <span>Deeper Hybrid Retrieval</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Deeper retrieval for technical or detailed questions. Combines dense vector search with PostgreSQL lexical full-text search, Reciprocal Rank Fusion (RRF), and deterministic local passage reranking.
+              </p>
+            </div>
+
+            <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg">
+              <div className="font-bold text-slate-900 flex items-center space-x-1.5">
+                <Badge variant="indigo">Hard</Badge>
+                <span>Maximum Multi-Query Retrieval</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Maximum retrieval effort for complex, ambiguous, or multi-part questions. Decomposes questions, generates multiple retrieval angles in parallel, performs provenance merging, reranking, and Redis semantic caching.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-slate-100">
+            <Button size="sm" onClick={() => setShowEffortHelpModal(false)}>
+              Got It
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Citation Inspector Modal */}

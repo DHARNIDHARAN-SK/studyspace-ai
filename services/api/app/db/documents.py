@@ -14,15 +14,14 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-async def ensure_tenant_hierarchy(
+async def ensure_workspace_hierarchy(
     session: AsyncSession,
     user_id: uuid.UUID,
     workspace_id: uuid.UUID,
-    project_id: uuid.UUID,
-) -> Project:
+) -> Workspace:
     """
-    Ensures that Profile, Workspace, and Project rows exist in the PostgreSQL database,
-    satisfying foreign key constraints and verifying workspace-project isolation.
+    Ensures that Profile and Workspace rows exist in the PostgreSQL database,
+    satisfying foreign key constraints.
     """
     # 1. Check or insert profile
     profile = await session.get(Profile, user_id)
@@ -58,6 +57,21 @@ async def ensure_tenant_hierarchy(
             )
             session.add(workspace)
             await session.flush()
+
+    return workspace
+
+
+async def ensure_tenant_hierarchy(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+) -> Project:
+    """
+    Ensures that Profile, Workspace, and Project rows exist in the PostgreSQL database,
+    satisfying foreign key constraints and verifying workspace-project isolation.
+    """
+    workspace = await ensure_workspace_hierarchy(session, user_id, workspace_id)
 
     # 3. Check or insert project
     project = await session.get(Project, project_id)

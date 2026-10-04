@@ -176,3 +176,43 @@ export interface ApiKey {
   last_used_at?: string;
   created_at: string;
 }
+
+export interface ApiKeyCreateInput {
+  name: string;
+  scopes?: string[];
+  expires_in_days?: number;
+}
+
+export interface ApiKeyCreatedResult {
+  id: string;
+  name: string;
+  raw_key: string;
+  key_prefix: string;
+  scopes: string[];
+  expires_at?: string;
+}
+
+export interface DeveloperAccessRequestInput {
+  name: string;
+  organization: string;
+  email: string;
+  phone?: string;
+  intended_use: string;
+  help_needed: string;
+  heard_about: string;
+  additional_message?: string;
+}
+
+export interface ContactInquiryInput {
+  name: string;
+  email: string;
+  institution?: string;
+  message: string;
+}
+
+export interface EmailDeliveryResponse {
+  success: boolean;
+  status: string;
+  message: string;
+  timestamp: string;
+}

@@ -1,5 +1,11 @@
 import type {
+  ApiKey,
+  ApiKeyCreateInput,
+  ApiKeyCreatedResult,
+  ContactInquiryInput,
   Conversation,
+  DeveloperAccessRequestInput,
+  EmailDeliveryResponse,
   HealthResponse,
   Message,
   Project,
@@ -189,6 +195,7 @@ export interface ChatQueryPayload {
   conversation_id?: string;
   top_k?: number;
   document_ids?: string[];
+  effort?: "simple" | "medium" | "hard";
   mode?: "baseline" | "advanced" | "conversational";
   rewrite_enabled?: boolean;
   selected_query?: string;
@@ -503,6 +510,94 @@ export async function exportContent(
       body: JSON.stringify(payload),
     }
   );
+}
+
+// -----------------------------------------------------------------------------
+// Developer Platform API (Phase 11)
+// -----------------------------------------------------------------------------
+export async function listApiKeys(token: string): Promise<ApiKey[]> {
+  const res = await fetchWithAuth<{ keys: ApiKey[]; total: number }>(
+    "/api/v1/developer/keys",
+    token
+  );
+  return res.keys;
+}
+
+export async function submitDeveloperAccessRequest(
+  token: string,
+  payload: DeveloperAccessRequestInput
+): Promise<EmailDeliveryResponse> {
+  return fetchWithAuth<EmailDeliveryResponse>(
+    "/api/v1/developer/requests",
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function createApiKey(
+  token: string,
+  payload: ApiKeyCreateInput
+): Promise<ApiKeyCreatedResult> {
+  return fetchWithAuth<ApiKeyCreatedResult>(
+    "/api/v1/developer/keys",
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function revokeApiKey(token: string, keyId: string): Promise<void> {
+  await fetchWithAuth<void>(
+    `/api/v1/developer/keys/${keyId}`,
+    token,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+export async function getUsageSummary(
+  token: string
+): Promise<{ total_events: number; events: any[] }> {
+  return fetchWithAuth<{ total_events: number; events: any[] }>(
+    "/api/v1/developer/usage",
+    token
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Contact Inquiries API
+// -----------------------------------------------------------------------------
+export async function submitContactInquiry(
+  payload: ContactInquiryInput
+): Promise<EmailDeliveryResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/contact`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let errorMsg = `Contact submission failed (${response.status})`;
+    try {
+      const errJson = await response.json();
+      if (errJson.error?.message) {
+        errorMsg = errJson.error.message;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errorMsg);
+  }
+
+  return response.json();
 }
 
 

@@ -10,11 +10,21 @@ router = APIRouter(tags=["Chat & Baseline/Conversational RAG"])
 chat_service = ChatService()
 
 
+def _to_uuid(val: Any) -> uuid.UUID:
+    if isinstance(val, uuid.UUID):
+        return val
+    try:
+        return uuid.UUID(str(val))
+    except ValueError:
+        return uuid.uuid5(uuid.NAMESPACE_DNS, str(val))
+
+
 class ChatQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000, description="Student academic query")
-    conversation_id: Optional[uuid.UUID] = Field(None, description="Existing conversation to append to")
+    conversation_id: Optional[str] = Field(None, description="Existing conversation to append to")
     top_k: Optional[int] = Field(5, ge=1, le=20, description="Number of relevant chunks to retrieve")
-    document_ids: Optional[List[uuid.UUID]] = Field(None, description="Optional document filter")
+    document_ids: Optional[List[str]] = Field(None, description="Optional document filter")
+    effort: Optional[str] = Field(None, description="Dynamic effort level: 'simple', 'medium', or 'hard'")
     mode: Optional[str] = Field(None, description="Retrieval mode: 'baseline', 'advanced', or 'conversational'")
     rewrite_enabled: Optional[bool] = Field(None, description="Whether to perform LLM contextual query rewriting")
     selected_query: Optional[str] = Field(None, description="Student-selected or edited query override")
@@ -25,7 +35,7 @@ class ChatQueryRequest(BaseModel):
 
 class RewritePreviewRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000, description="Student query to reformulate")
-    conversation_id: Optional[uuid.UUID] = Field(None, description="Conversation context for pronoun resolution")
+    conversation_id: Optional[str] = Field(None, description="Conversation context for pronoun resolution")
 
 
 class RewritePreviewResponse(BaseModel):
@@ -100,19 +110,21 @@ class MessageListResponse(BaseModel):
     summary="Preview conversational query rewriting before executing retrieval",
 )
 async def preview_query_rewrite(
-    project_id: uuid.UUID,
+    project_id: str,
     payload: RewritePreviewRequest,
     current_user: Any = Depends(get_current_user),
 ) -> RewritePreviewResponse:
-    workspace_id = uuid.UUID(str(getattr(current_user, "workspace_id", None) or current_user["workspace_id"]))
-    user_id = uuid.UUID(str(getattr(current_user, "id", None) or current_user["user_id"]))
+    workspace_id = _to_uuid(getattr(current_user, "workspace_id", None) or current_user["workspace_id"])
+    user_id = _to_uuid(getattr(current_user, "id", None) or current_user["user_id"])
+    proj_uuid = _to_uuid(project_id)
+    conv_uuid = _to_uuid(payload.conversation_id) if payload.conversation_id else None
 
     result = await chat_service.preview_rewrite(
         workspace_id=workspace_id,
-        project_id=project_id,
+        project_id=proj_uuid,
         user_id=user_id,
         query=payload.query,
-        conversation_id=payload.conversation_id,
+        conversation_id=conv_uuid,
     )
     return RewritePreviewResponse(**result)
 
@@ -124,21 +136,25 @@ async def preview_query_rewrite(
     summary="Submit query to RAG pipeline (conversational, advanced hybrid, or baseline) and receive grounded answer",
 )
 async def chat_with_project_rag(
-    project_id: uuid.UUID,
+    project_id: str,
     payload: ChatQueryRequest,
     current_user: Any = Depends(get_current_user),
 ) -> ChatQueryResponse:
-    workspace_id = uuid.UUID(str(getattr(current_user, "workspace_id", None) or current_user["workspace_id"]))
-    user_id = uuid.UUID(str(getattr(current_user, "id", None) or current_user["user_id"]))
+    workspace_id = _to_uuid(getattr(current_user, "workspace_id", None) or current_user["workspace_id"])
+    user_id = _to_uuid(getattr(current_user, "id", None) or current_user["user_id"])
+    proj_uuid = _to_uuid(project_id)
+    conv_uuid = _to_uuid(payload.conversation_id) if payload.conversation_id else None
+    doc_uuids = [_to_uuid(d) for d in payload.document_ids] if payload.document_ids else None
 
     result = await chat_service.handle_chat_query(
         workspace_id=workspace_id,
-        project_id=project_id,
+        project_id=proj_uuid,
         user_id=user_id,
         query=payload.query,
-        conversation_id=payload.conversation_id,
+        conversation_id=conv_uuid,
         top_k=payload.top_k or 5,
-        document_ids=payload.document_ids,
+        document_ids=doc_uuids,
+        effort=payload.effort,
         retrieval_mode=payload.mode,
         rewrite_enabled=payload.rewrite_enabled,
         selected_query=payload.selected_query,
@@ -155,13 +171,14 @@ async def chat_with_project_rag(
     summary="List conversations in a project",
 )
 async def list_project_conversations(
-    project_id: uuid.UUID,
+    project_id: str,
     current_user: Any = Depends(get_current_user),
 ) -> ConversationListResponse:
-    workspace_id = uuid.UUID(str(getattr(current_user, "workspace_id", None) or current_user["workspace_id"]))
+    workspace_id = _to_uuid(getattr(current_user, "workspace_id", None) or current_user["workspace_id"])
+    proj_uuid = _to_uuid(project_id)
     conversations = await chat_service.list_conversations(
         workspace_id=workspace_id,
-        project_id=project_id,
+        project_id=proj_uuid,
     )
     return ConversationListResponse(
         conversations=[ConversationItem(**c) for c in conversations],
@@ -175,15 +192,17 @@ async def list_project_conversations(
     summary="Get conversation history and citations",
 )
 async def get_conversation_history(
-    project_id: uuid.UUID,
-    conversation_id: uuid.UUID,
+    project_id: str,
+    conversation_id: str,
     current_user: Any = Depends(get_current_user),
 ) -> MessageListResponse:
-    workspace_id = uuid.UUID(str(getattr(current_user, "workspace_id", None) or current_user["workspace_id"]))
+    workspace_id = _to_uuid(getattr(current_user, "workspace_id", None) or current_user["workspace_id"])
+    proj_uuid = _to_uuid(project_id)
+    conv_uuid = _to_uuid(conversation_id)
     messages = await chat_service.get_conversation_messages(
         workspace_id=workspace_id,
-        project_id=project_id,
-        conversation_id=conversation_id,
+        project_id=proj_uuid,
+        conversation_id=conv_uuid,
     )
     return MessageListResponse(
         messages=[ChatMessageResponse(**m) for m in messages],

@@ -13,6 +13,8 @@ from app.db.repository import Repository, store
 from app.db.session import get_db_optional
 from app.schemas.projects import ProjectCreate, ProjectListResponse, ProjectResponse, ProjectUpdate
 
+from app.db.documents import ensure_tenant_hierarchy
+
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
@@ -20,7 +22,10 @@ def _to_uuid(val: str) -> Optional[uuid.UUID]:
     try:
         return uuid.UUID(str(val))
     except (ValueError, AttributeError, TypeError):
-        return None
+        try:
+            return uuid.uuid5(uuid.NAMESPACE_DNS, str(val))
+        except Exception:
+            return None
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -43,41 +48,14 @@ async def create_project(
 
         if user_uuid and ws_uuid and proj_uuid:
             try:
-                profile = await db.get(Profile, user_uuid)
-                if not profile:
-                    try:
-                        async with db.begin_nested():
-                            await db.execute(
-                                text("INSERT INTO auth.users (id, email) VALUES (:id, :email) ON CONFLICT (id) DO NOTHING"),
-                                {"id": user_uuid, "email": current_user.email or f"user-{user_uuid}@studyspace.ai"},
-                            )
-                    except Exception:
-                        pass
-                    profile = Profile(id=user_uuid, display_name="Student")
-                    db.add(profile)
-                    await db.flush()
-
-                workspace = await db.get(Workspace, ws_uuid)
-                if not workspace:
-                    workspace = Workspace(
-                        id=ws_uuid,
-                        owner_user_id=user_uuid,
-                        name=current_user.workspace_name or "Personal Workspace",
-                    )
-                    db.add(workspace)
-                    await db.flush()
-
-                db_proj = Project(
-                    id=proj_uuid,
-                    workspace_id=ws_uuid,
-                    name=project["name"],
-                    description=project.get("description"),
-                    subject=project.get("subject"),
-                )
-                db.add(db_proj)
+                await ensure_tenant_hierarchy(db, user_uuid, ws_uuid, proj_uuid)
                 await db.commit()
             except Exception as e:
                 logger.warning("Failed to sync created project to database: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
     return ProjectResponse(**project)
 

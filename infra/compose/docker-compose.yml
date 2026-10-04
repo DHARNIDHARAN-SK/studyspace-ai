@@ -54,6 +54,12 @@ services:
         condition: service_healthy
     env_file:
       - ../../.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/studyspace
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../../services/api/uploads:/app/uploads
     ports:
@@ -76,6 +82,12 @@ services:
         condition: service_healthy
     env_file:
       - ../../.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/studyspace
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../../services/api/uploads:/app/uploads
 

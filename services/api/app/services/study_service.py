@@ -26,6 +26,7 @@ from app.db.models import (
     StudyGuide,
     Workspace,
 )
+from app.db.documents import ensure_tenant_hierarchy, ensure_workspace_hierarchy
 from app.db.repository import store
 from app.db.session import get_session_factory
 from app.rag.context.builder import ContextBuilder
@@ -110,6 +111,7 @@ class StudyService:
 
         if db is not None:
             try:
+                await ensure_tenant_hierarchy(db, user_id, workspace_id, project_id)
                 db_item = RevisionItem(
                     id=item_id,
                     workspace_id=workspace_id,
@@ -126,6 +128,10 @@ class StudyService:
                 await db.commit()
             except Exception as e:
                 logger.warning("Failed to persist revision item in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         return RevisionItemResponse(
             id=str(item_id),
@@ -193,6 +199,10 @@ class StudyService:
                     store.revision_items[str_id] = items_map[str_id]
             except Exception as e:
                 logger.warning("Failed to query revision items from DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         # 2. Merge with memory store
         for item_id, item in store.revision_items.items():
@@ -264,53 +274,62 @@ class StudyService:
             raise NotFoundError(f"Revision item {item_id} not found.")
 
         if db is not None:
-            db_item = await db.get(RevisionItem, item_id)
-            if not db_item:
-                raise NotFoundError(f"Revision item {item_id} not found.")
-            if db_item.project_id != project_id or db_item.workspace_id != workspace_id:
-                raise ForbiddenError("Access to revision item denied.")
+            try:
+                db_item = await db.get(RevisionItem, item_id)
+                if not db_item:
+                    raise NotFoundError(f"Revision item {item_id} not found.")
+                if db_item.project_id != project_id or db_item.workspace_id != workspace_id:
+                    raise ForbiddenError("Access to revision item denied.")
 
-            if data.title is not None:
-                db_item.title = data.title
-            if data.description is not None:
-                db_item.description = data.description
-            if data.status is not None:
-                db_item.status = data.status
-            if data.notes is not None:
-                db_item.notes = data.notes
-            db_item.updated_at = now
-            await db.commit()
+                if data.title is not None:
+                    db_item.title = data.title
+                if data.description is not None:
+                    db_item.description = data.description
+                if data.status is not None:
+                    db_item.status = data.status
+                if data.notes is not None:
+                    db_item.notes = data.notes
+                db_item.updated_at = now
+                await db.commit()
 
-            # Refresh links
-            stmt = select(RevisionItemLink).where(RevisionItemLink.revision_item_id == item_id)
-            res = await db.execute(stmt)
-            db_links = res.scalars().all()
-            links_data = [
-                {
-                    "id": str(l.id),
-                    "revision_item_id": str(l.revision_item_id),
-                    "target_type": l.target_type,
-                    "target_id": str(l.target_id),
-                    "metadata": l.metadata_ or {},
-                    "created_at": l.created_at,
+                # Refresh links
+                stmt = select(RevisionItemLink).where(RevisionItemLink.revision_item_id == item_id)
+                res = await db.execute(stmt)
+                db_links = res.scalars().all()
+                links_data = [
+                    {
+                        "id": str(l.id),
+                        "revision_item_id": str(l.revision_item_id),
+                        "target_type": l.target_type,
+                        "target_id": str(l.target_id),
+                        "metadata": l.metadata_ or {},
+                        "created_at": l.created_at,
+                    }
+                    for l in db_links
+                ]
+
+                item = {
+                    "id": str_id,
+                    "workspace_id": str(db_item.workspace_id),
+                    "project_id": str(db_item.project_id),
+                    "user_id": str(db_item.user_id),
+                    "title": db_item.title,
+                    "description": db_item.description,
+                    "status": db_item.status,
+                    "notes": db_item.notes,
+                    "created_at": db_item.created_at,
+                    "updated_at": db_item.updated_at,
+                    "links": links_data,
                 }
-                for l in db_links
-            ]
-
-            item = {
-                "id": str_id,
-                "workspace_id": str(db_item.workspace_id),
-                "project_id": str(db_item.project_id),
-                "user_id": str(db_item.user_id),
-                "title": db_item.title,
-                "description": db_item.description,
-                "status": db_item.status,
-                "notes": db_item.notes,
-                "created_at": db_item.created_at,
-                "updated_at": db_item.updated_at,
-                "links": links_data,
-            }
-            store.revision_items[str_id] = item
+                store.revision_items[str_id] = item
+            except (NotFoundError, ForbiddenError):
+                raise
+            except Exception as e:
+                logger.warning("Failed to update revision item in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
         else:
             if item["project_id"] != str(project_id) or item["workspace_id"] != str(workspace_id):
                 raise ForbiddenError("Access to revision item denied.")
@@ -361,12 +380,21 @@ class StudyService:
             del store.revision_items[str_id]
 
         if db is not None:
-            db_item = await db.get(RevisionItem, item_id)
-            if db_item:
-                if db_item.project_id != project_id or db_item.workspace_id != workspace_id:
-                    raise ForbiddenError("Access to revision item denied.")
-                await db.delete(db_item)
-                await db.commit()
+            try:
+                db_item = await db.get(RevisionItem, item_id)
+                if db_item:
+                    if db_item.project_id != project_id or db_item.workspace_id != workspace_id:
+                        raise ForbiddenError("Access to revision item denied.")
+                    await db.delete(db_item)
+                    await db.commit()
+            except ForbiddenError:
+                raise
+            except Exception as e:
+                logger.warning("Failed to delete revision item in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
     async def add_revision_link(
         self,
@@ -395,17 +423,24 @@ class StudyService:
             store.revision_items[str_item_id].setdefault("links", []).append(link_dict)
 
         if db is not None:
-            target_uuid = _to_uuid(data.target_id) or uuid.uuid4()
-            db_link = RevisionItemLink(
-                id=link_id,
-                revision_item_id=item_id,
-                target_type=data.target_type,
-                target_id=target_uuid,
-                metadata_=data.metadata or {},
-                created_at=now,
-            )
-            db.add(db_link)
-            await db.commit()
+            try:
+                target_uuid = _to_uuid(data.target_id) or uuid.uuid4()
+                db_link = RevisionItemLink(
+                    id=link_id,
+                    revision_item_id=item_id,
+                    target_type=data.target_type,
+                    target_id=target_uuid,
+                    metadata_=data.metadata or {},
+                    created_at=now,
+                )
+                db.add(db_link)
+                await db.commit()
+            except Exception as e:
+                logger.warning("Failed to persist revision link in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         return RevisionLinkResponse(**link_dict)
 
@@ -529,6 +564,7 @@ class StudyService:
 
         if db is not None:
             try:
+                await ensure_tenant_hierarchy(db, user_id, workspace_id, project_id)
                 db_guide = StudyGuide(
                     id=guide_id,
                     workspace_id=workspace_id,
@@ -545,6 +581,10 @@ class StudyService:
                 await db.commit()
             except Exception as e:
                 logger.warning("Failed to persist study guide in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         return StudyGuideResponse(
             id=str(guide_id),
@@ -595,6 +635,10 @@ class StudyService:
                     store.study_guides[str_id] = guides_map[str_id]
             except Exception as e:
                 logger.warning("Failed to query study guides from DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         for gid, g in store.study_guides.items():
             if g.get("project_id") == str(project_id) and gid not in guides_map:
@@ -613,21 +657,30 @@ class StudyService:
     ) -> StudyGuideResponse:
         str_id = str(guide_id)
         if db is not None:
-            db_guide = await db.get(StudyGuide, guide_id)
-            if db_guide:
-                if db_guide.project_id != project_id or db_guide.workspace_id != workspace_id:
-                    raise ForbiddenError("Access to study guide denied.")
-                return StudyGuideResponse(
-                    id=str(db_guide.id),
-                    workspace_id=str(db_guide.workspace_id),
-                    project_id=str(db_guide.project_id),
-                    title=db_guide.title,
-                    content=db_guide.content,
-                    guide_type=db_guide.guide_type,
-                    source_citations=db_guide.source_citations or [],
-                    created_at=db_guide.created_at,
-                    updated_at=db_guide.updated_at,
-                )
+            try:
+                db_guide = await db.get(StudyGuide, guide_id)
+                if db_guide:
+                    if db_guide.project_id != project_id or db_guide.workspace_id != workspace_id:
+                        raise ForbiddenError("Access to study guide denied.")
+                    return StudyGuideResponse(
+                        id=str(db_guide.id),
+                        workspace_id=str(db_guide.workspace_id),
+                        project_id=str(db_guide.project_id),
+                        title=db_guide.title,
+                        content=db_guide.content,
+                        guide_type=db_guide.guide_type,
+                        source_citations=db_guide.source_citations or [],
+                        created_at=db_guide.created_at,
+                        updated_at=db_guide.updated_at,
+                    )
+            except ForbiddenError:
+                raise
+            except Exception as e:
+                logger.warning("Failed to get study guide from DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         g = store.study_guides.get(str_id)
         if not g:
@@ -805,6 +858,7 @@ class StudyService:
 
         if db is not None:
             try:
+                await ensure_tenant_hierarchy(db, user_id, workspace_id, project_id)
                 db_quiz = Quiz(
                     id=quiz_id,
                     workspace_id=workspace_id,
@@ -836,6 +890,10 @@ class StudyService:
                 await db.commit()
             except Exception as e:
                 logger.warning("Failed to persist quiz in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         # Public quiz response hides expected_answer and explanation!
         return QuizSchemaResponse(
@@ -911,6 +969,10 @@ class StudyService:
                     store.quizzes[str_id] = quizzes_map[str_id]
             except Exception as e:
                 logger.warning("Failed to query quizzes from DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         for qid, q in store.quizzes.items():
             if q.get("project_id") == str(project_id) and qid not in quizzes_map:
@@ -957,42 +1019,51 @@ class StudyService:
         # Ensure loaded
         quiz_dict = store.quizzes.get(str_id)
         if not quiz_dict and db is not None:
-            stmt = (
-                select(Quiz)
-                .options(selectinload(Quiz.questions))
-                .where(Quiz.id == quiz_id)
-            )
-            res = await db.execute(stmt)
-            q = res.scalars().first()
-            if q:
-                if q.project_id != project_id or q.workspace_id != workspace_id:
-                    raise ForbiddenError("Access to quiz denied.")
-                q_list = [
-                    {
-                        "id": str(ques.id),
-                        "quiz_id": str(ques.quiz_id),
-                        "question_type": ques.question_type,
-                        "difficulty": ques.difficulty,
-                        "prompt": ques.prompt,
-                        "options": ques.options,
-                        "expected_answer": ques.expected_answer,
-                        "explanation": ques.explanation,
-                        "source_citations": ques.source_citations or [],
-                        "position": ques.position,
-                        "created_at": ques.created_at,
+            try:
+                stmt = (
+                    select(Quiz)
+                    .options(selectinload(Quiz.questions))
+                    .where(Quiz.id == quiz_id)
+                )
+                res = await db.execute(stmt)
+                q = res.scalars().first()
+                if q:
+                    if q.project_id != project_id or q.workspace_id != workspace_id:
+                        raise ForbiddenError("Access to quiz denied.")
+                    q_list = [
+                        {
+                            "id": str(ques.id),
+                            "quiz_id": str(ques.quiz_id),
+                            "question_type": ques.question_type,
+                            "difficulty": ques.difficulty,
+                            "prompt": ques.prompt,
+                            "options": ques.options,
+                            "expected_answer": ques.expected_answer,
+                            "explanation": ques.explanation,
+                            "source_citations": ques.source_citations or [],
+                            "position": ques.position,
+                            "created_at": ques.created_at,
+                        }
+                        for ques in q.questions
+                    ]
+                    quiz_dict = {
+                        "id": str_id,
+                        "workspace_id": str(q.workspace_id),
+                        "project_id": str(q.project_id),
+                        "title": q.title,
+                        "status": q.status,
+                        "created_at": q.created_at,
+                        "questions": q_list,
                     }
-                    for ques in q.questions
-                ]
-                quiz_dict = {
-                    "id": str_id,
-                    "workspace_id": str(q.workspace_id),
-                    "project_id": str(q.project_id),
-                    "title": q.title,
-                    "status": q.status,
-                    "created_at": q.created_at,
-                    "questions": q_list,
-                }
-                store.quizzes[str_id] = quiz_dict
+                    store.quizzes[str_id] = quiz_dict
+            except ForbiddenError:
+                raise
+            except Exception as e:
+                logger.warning("Failed to query quiz from DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         if not quiz_dict:
             raise NotFoundError(f"Quiz {quiz_id} not found.")
@@ -1154,6 +1225,10 @@ class StudyService:
                 await db.commit()
             except Exception as e:
                 logger.warning("Failed to persist quiz attempt in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         return QuizAttemptResultResponse(
             attempt_id=str(attempt_id),
@@ -1243,6 +1318,7 @@ class StudyService:
 
         if db is not None:
             try:
+                await ensure_workspace_hierarchy(db, user_id, workspace_id)
                 db_export = Export(
                     id=export_id,
                     workspace_id=workspace_id,
@@ -1258,6 +1334,10 @@ class StudyService:
                 await db.commit()
             except Exception as e:
                 logger.warning("Failed to persist export in DB: %s", e)
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         return ExportResponse(
             id=str(export_id),
