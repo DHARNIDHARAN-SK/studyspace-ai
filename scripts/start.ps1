@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  StudySpace AI — Canonical Local Startup Script
+  StudySpace AI - Canonical Local Startup Script
 .DESCRIPTION
   Launches all required local services:
   1. Ollama model verification (nomic-embed-text:latest, phi4-mini:latest)
@@ -17,11 +17,11 @@ param(
 $ErrorActionPreference = "Continue"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "        StudySpace AI — Service Startup Sequence          " -ForegroundColor Cyan
+Write-Host "        StudySpace AI - Service Startup Sequence          " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. Check Ollama
-Write-Host "`n[1/4] Checking Ollama Local LLM & Embedding Service..." -ForegroundColor Yellow
+Write-Host "`n[1/4] Checking Ollama Local LLM and Embedding Service..." -ForegroundColor Yellow
 try {
     $ollamaCheck = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -Method Get -TimeoutSec 3 -ErrorAction Stop
     $models = $ollamaCheck.models | ForEach-Object { $_.name }
@@ -115,8 +115,8 @@ if ($apiHealthy) {
     Write-Host "  [!] Backend API is still initializing or offline. Check container/service logs." -ForegroundColor Yellow
 }
 
-# 4. Service Directory & Access Endpoints
-Write-Host "`n[4/4] StudySpace AI Ready — Access Endpoints:" -ForegroundColor Cyan
+# 4. Service Directory and Access Endpoints
+Write-Host "`n[4/4] StudySpace AI Ready - Access Endpoints:" -ForegroundColor Cyan
 Write-Host "----------------------------------------------------------" -ForegroundColor DarkGray
 Write-Host "  Web Frontend:        http://localhost:3000" -ForegroundColor White
 Write-Host "  Backend API:         http://localhost:8000" -ForegroundColor White
