@@ -7,6 +7,7 @@ from app.api.v1.chat import router as chat_v1_router
 from app.api.v1.documents import router as documents_v1_router
 from app.api.v1.health import router as health_v1_router, get_health
 from app.api.v1.projects import router as projects_v1_router
+from app.api.v1.study import router as study_v1_router
 from app.core.config import settings
 from app.core.errors import AppError, app_error_handler, generic_exception_handler
 from app.core.logging import logger, setup_logging
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(projects_v1_router, prefix=settings.API_PREFIX)
     app.include_router(documents_v1_router, prefix=settings.API_PREFIX)
     app.include_router(chat_v1_router, prefix=settings.API_PREFIX)
+    app.include_router(study_v1_router, prefix=settings.API_PREFIX)
 
     return app
 

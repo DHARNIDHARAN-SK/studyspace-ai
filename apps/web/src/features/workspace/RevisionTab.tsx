@@ -1,7 +1,15 @@
-import React, { useMemo, useState } from "react";
-import { CheckSquare, Plus, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckSquare, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
+import { useAuth } from "../auth/AuthContext";
+import {
+  createRevisionItem,
+  deleteRevisionItem,
+  listRevisionItems,
+  updateRevisionItem,
+  type RevisionProgressStats,
+} from "../../lib/api-client";
 import type { Project, RevisionItem, RevisionStatus } from "../../types";
 
 interface RevisionTabProps {
@@ -9,79 +17,94 @@ interface RevisionTabProps {
 }
 
 export function RevisionTab({ project }: RevisionTabProps) {
-  const [items, setItems] = useState<RevisionItem[]>([
-    {
-      id: "rev-1",
-      project_id: project.id,
-      workspace_id: project.workspace_id,
-      title: "Asymptotic Notation and Recurrence Relations",
-      description: "Master Big-O, Big-Theta bounds and Master Theorem cases for recursive algorithms.",
-      status: "revised",
-      created_at: new Date(Date.now() - 3600000 * 48).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "rev-2",
-      project_id: project.id,
-      workspace_id: project.workspace_id,
-      title: "Graph Traversal: BFS vs DFS Topological Ordering",
-      description: "Review edge classification (tree, back, forward, cross) in directed graphs.",
-      status: "learning",
-      created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "rev-3",
-      project_id: project.id,
-      workspace_id: project.workspace_id,
-      title: "Dynamic Programming: Optimal Substructure & Overlapping Subproblems",
-      description: "Knapsack variations, memoization vs bottom-up tabulation.",
-      status: "not_started",
-      created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]);
+  const { token } = useAuth();
+  const [items, setItems] = useState<RevisionItem[]>([]);
+  const [stats, setStats] = useState<RevisionProgressStats>({
+    total_items: 0,
+    not_started: 0,
+    learning: 0,
+    revised: 0,
+    completion_percentage: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<"all" | RevisionStatus>("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchItems = useCallback(async () => {
+    if (!token) return;
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await listRevisionItems(token, project.id, filter);
+      setItems(res.items);
+      setStats(res.stats);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load revision topics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, project.id, filter]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   const filteredItems = useMemo(() => {
     if (filter === "all") return items;
     return items.filter((i) => i.status === filter);
   }, [items, filter]);
 
-  const revisedCount = items.filter((i) => i.status === "revised").length;
-  const progressPercent = items.length > 0 ? Math.round((revisedCount / items.length) * 100) : 0;
-
-  const handleStatusChange = (id: string, newStatus: RevisionStatus) => {
-    setItems(items.map((i) => (i.id === id ? { ...i, status: newStatus, updated_at: new Date().toISOString() } : i)));
+  const handleStatusChange = async (id: string, newStatus: RevisionStatus) => {
+    if (!token) return;
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, status: newStatus, updated_at: new Date().toISOString() } : i))
+    );
+    try {
+      await updateRevisionItem(token, project.id, id, { status: newStatus });
+      fetchItems();
+    } catch (err: any) {
+      setError(err?.message || "Failed to update topic status");
+      fetchItems();
+    }
   };
 
-  const handleAddItem = (e: React.FormEvent) => {
+  const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
-
-    const newItem: RevisionItem = {
-      id: `rev-${Date.now()}`,
-      project_id: project.id,
-      workspace_id: project.workspace_id,
-      title: newTitle.trim(),
-      description: newDesc.trim() || undefined,
-      status: "not_started",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    setItems([...items, newItem]);
-    setNewTitle("");
-    setNewDesc("");
-    setShowAddModal(false);
+    if (!newTitle.trim() || !token) return;
+    try {
+      setIsSubmitting(true);
+      await createRevisionItem(token, project.id, {
+        title: newTitle.trim(),
+        description: newDesc.trim() || undefined,
+        status: "not_started",
+      });
+      setNewTitle("");
+      setNewDesc("");
+      setShowAddModal(false);
+      await fetchItems();
+    } catch (err: any) {
+      setError(err?.message || "Failed to create revision topic");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteItem = (id: string) => {
-    setItems(items.filter((i) => i.id !== id));
+  const handleDeleteItem = async (id: string) => {
+    if (!token) return;
+    try {
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      await deleteRevisionItem(token, project.id, id);
+      fetchItems();
+    } catch (err: any) {
+      setError(err?.message || "Failed to delete revision topic");
+      fetchItems();
+    }
   };
 
   return (
@@ -102,26 +125,42 @@ export function RevisionTab({ project }: RevisionTabProps) {
           {/* Progress bar */}
           <div className="mt-3 max-w-sm">
             <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-              <span>{revisedCount} of {items.length} topics revised</span>
-              <span className="font-semibold text-slate-700">{progressPercent}%</span>
+              <span>{stats.revised} of {stats.total_items} topics revised</span>
+              <span className="font-semibold text-slate-700">{stats.completion_percentage.toFixed(0)}%</span>
             </div>
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-indigo-600 rounded-full transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
+                style={{ width: `${stats.completion_percentage}%` }}
               />
             </div>
           </div>
         </div>
 
-        <Button
-          onClick={() => setShowAddModal(true)}
-          size="sm"
-          leftIcon={<Plus className="w-3.5 h-3.5" />}
-        >
-          Add Topic
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            onClick={() => fetchItems()}
+            variant="outline"
+            size="sm"
+            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />}
+          >
+            Refresh
+          </Button>
+          <Button
+            onClick={() => setShowAddModal(true)}
+            size="sm"
+            leftIcon={<Plus className="w-3.5 h-3.5" />}
+          >
+            Add Topic
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <div className="p-3 text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg">
+          {error}
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 overflow-x-auto text-xs">
@@ -149,7 +188,12 @@ export function RevisionTab({ project }: RevisionTabProps) {
 
       {/* Items List */}
       <div className="space-y-3">
-        {filteredItems.length === 0 ? (
+        {isLoading && items.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500 flex items-center justify-center space-x-2">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+            <span>Loading revision topics...</span>
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">
             No revision topics in this category.
           </div>
@@ -249,8 +293,8 @@ export function RevisionTab({ project }: RevisionTabProps) {
             <Button type="button" variant="outline" size="sm" onClick={() => setShowAddModal(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="sm">
-              Add Topic
+            <Button type="submit" size="sm" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add Topic"}
             </Button>
           </div>
         </form>

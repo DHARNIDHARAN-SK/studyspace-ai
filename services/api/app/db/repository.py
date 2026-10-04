@@ -10,11 +10,31 @@ class MemoryStore:
         self.profiles: Dict[str, dict] = {}
         self.workspaces: Dict[str, dict] = {}
         self.projects: Dict[str, dict] = {}
+        self.revision_items: Dict[str, dict] = {}
+        self.revision_links: Dict[str, dict] = {}
+        self.study_guides: Dict[str, dict] = {}
+        self.quizzes: Dict[str, dict] = {}
+        self.quiz_questions: Dict[str, dict] = {}
+        self.quiz_attempts: Dict[str, dict] = {}
+        self.quiz_responses: Dict[str, dict] = {}
+        self.exports: Dict[str, dict] = {}
+        self.api_keys: Dict[str, dict] = {}
+        self.usage_events: List[dict] = []
 
     def clear(self):
-        self.profiles.clear( )
+        self.profiles.clear()
         self.workspaces.clear()
         self.projects.clear()
+        self.revision_items.clear()
+        self.revision_links.clear()
+        self.study_guides.clear()
+        self.quizzes.clear()
+        self.quiz_questions.clear()
+        self.quiz_attempts.clear()
+        self.quiz_responses.clear()
+        self.exports.clear()
+        self.api_keys.clear()
+        self.usage_events.clear()
 
 
 # Global store instance

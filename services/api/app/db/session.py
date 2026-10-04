@@ -106,11 +106,50 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+_db_is_reachable: Optional[bool] = None
+_last_db_check_time: float = 0.0
+
+
+async def is_db_available() -> bool:
+    global _db_is_reachable, _last_db_check_time
+    now = time.time()
+    if _db_is_reachable is not None and (now - _last_db_check_time) < 5.0:
+        return _db_is_reachable
+
+    if not check_database_configured():
+        _db_is_reachable = False
+        _last_db_check_time = now
+        return False
+
+    engine = get_engine()
+    if engine is None:
+        _db_is_reachable = False
+        _last_db_check_time = now
+        return False
+
+    try:
+        async def _probe():
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+
+        await asyncio.wait_for(_probe(), timeout=0.8)
+        _db_is_reachable = True
+    except Exception:
+        _db_is_reachable = False
+
+    _last_db_check_time = now
+    return _db_is_reachable
+
+
 async def get_db_optional() -> AsyncGenerator[Optional[AsyncSession], None]:
     """
     FastAPI dependency yielding an async database session if available,
     or None if the database is offline or not configured.
     """
+    if not await is_db_available():
+        yield None
+        return
+
     session_factory = get_session_factory()
     if session_factory is None:
         yield None

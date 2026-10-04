@@ -6,6 +6,9 @@ import type {
   ProjectCreateInput,
   ProjectDocument,
   ProjectUpdateInput,
+  RevisionItem,
+  RevisionStatus,
+  StudyGuide,
   UserProfile,
 } from "../types";
 
@@ -290,5 +293,217 @@ export async function getConversationMessages(
   );
   return res.messages;
 }
+
+// -----------------------------------------------------------------------------
+// Student Study Features API (Phase 10)
+// -----------------------------------------------------------------------------
+
+export interface RevisionProgressStats {
+  total_items: number;
+  not_started: number;
+  learning: number;
+  revised: number;
+  completion_percentage: number;
+}
+
+export interface RevisionListResponse {
+  items: RevisionItem[];
+  stats: RevisionProgressStats;
+}
+
+export async function listRevisionItems(
+  token: string,
+  projectId: string,
+  status?: string
+): Promise<RevisionListResponse> {
+  const query = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+  return fetchWithAuth<RevisionListResponse>(
+    `/api/v1/projects/${projectId}/revision${query}`,
+    token
+  );
+}
+
+export async function createRevisionItem(
+  token: string,
+  projectId: string,
+  payload: { title: string; description?: string; status?: RevisionStatus; notes?: string }
+): Promise<RevisionItem> {
+  return fetchWithAuth<RevisionItem>(
+    `/api/v1/projects/${projectId}/revision`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function updateRevisionItem(
+  token: string,
+  projectId: string,
+  itemId: string,
+  payload: { title?: string; description?: string; status?: RevisionStatus; notes?: string }
+): Promise<RevisionItem> {
+  return fetchWithAuth<RevisionItem>(
+    `/api/v1/projects/${projectId}/revision/${itemId}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function deleteRevisionItem(
+  token: string,
+  projectId: string,
+  itemId: string
+): Promise<void> {
+  await fetchWithAuth<void>(
+    `/api/v1/projects/${projectId}/revision/${itemId}`,
+    token,
+    { method: "DELETE" }
+  );
+}
+
+// Study Guides
+export async function listStudyGuides(
+  token: string,
+  projectId: string
+): Promise<{ guides: StudyGuide[]; total: number }> {
+  return fetchWithAuth<{ guides: StudyGuide[]; total: number }>(
+    `/api/v1/projects/${projectId}/guides`,
+    token
+  );
+}
+
+export async function generateStudyGuide(
+  token: string,
+  projectId: string,
+  payload: { topic: string; guide_type?: string; focus_areas?: string[] }
+): Promise<StudyGuide> {
+  return fetchWithAuth<StudyGuide>(
+    `/api/v1/projects/${projectId}/guides/generate`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+// Quizzes
+export interface QuizPublicQuestion {
+  id: string;
+  quiz_id: string;
+  question_type: string;
+  difficulty: string;
+  prompt: string;
+  options?: string[];
+  position: number;
+}
+
+export interface QuizPublic {
+  id: string;
+  workspace_id: string;
+  project_id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  questions: QuizPublicQuestion[];
+}
+
+export interface QuestionResult {
+  question_id: string;
+  prompt: string;
+  question_type: string;
+  submitted_answer: string;
+  expected_answer: string;
+  is_correct: boolean;
+  explanation: string;
+  feedback: string;
+  source_citations: any[];
+}
+
+export interface QuizAttemptResult {
+  attempt_id: string;
+  quiz_id: string;
+  score: number;
+  total_questions: number;
+  correct_count: number;
+  percentage: number;
+  started_at: string;
+  completed_at: string;
+  results: QuestionResult[];
+}
+
+export async function listQuizzes(
+  token: string,
+  projectId: string
+): Promise<{ quizzes: QuizPublic[]; total: number }> {
+  return fetchWithAuth<{ quizzes: QuizPublic[]; total: number }>(
+    `/api/v1/projects/${projectId}/quizzes`,
+    token
+  );
+}
+
+export async function generateQuiz(
+  token: string,
+  projectId: string,
+  payload: { title?: string; topic?: string; num_questions?: number; difficulty?: string }
+): Promise<QuizPublic> {
+  return fetchWithAuth<QuizPublic>(
+    `/api/v1/projects/${projectId}/quizzes/generate`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function submitQuizAttempt(
+  token: string,
+  projectId: string,
+  quizId: string,
+  answers: { question_id: string; submitted_answer: string }[]
+): Promise<QuizAttemptResult> {
+  return fetchWithAuth<QuizAttemptResult>(
+    `/api/v1/projects/${projectId}/quizzes/${quizId}/attempts`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({ responses: answers }),
+    }
+  );
+}
+
+// Export
+export interface ExportResult {
+  id: string;
+  source_type: string;
+  source_id: string;
+  format: string;
+  status: string;
+  content?: string;
+  filename: string;
+  created_at: string;
+}
+
+export async function exportContent(
+  token: string,
+  projectId: string,
+  payload: { source_type: "study_guide" | "quiz" | "revision"; source_id: string; format?: "markdown" | "txt" | "pdf" | "docx" }
+): Promise<ExportResult> {
+  return fetchWithAuth<ExportResult>(
+    `/api/v1/projects/${projectId}/export`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 
 

@@ -237,6 +237,24 @@ class RevisionItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
+    links: Mapped[List["RevisionItemLink"]] = relationship("RevisionItemLink", back_populates="revision_item", cascade="all, delete-orphan")
+
+
+# -----------------------------------------------------------------------------
+# 9b. RevisionItemLink
+# -----------------------------------------------------------------------------
+class RevisionItemLink(Base):
+    __tablename__ = "revision_item_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    revision_item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("revision_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(Text, nullable=False)
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    metadata_: Mapped[Dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    revision_item: Mapped["RevisionItem"] = relationship("RevisionItem", back_populates="links")
+
 
 # -----------------------------------------------------------------------------
 # 10. StudyGuide
@@ -299,7 +317,106 @@ class QuizQuestion(Base):
 
 
 # -----------------------------------------------------------------------------
-# 13. IngestionJob
+# 12b. QuizAttempt
+# -----------------------------------------------------------------------------
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    quiz_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("quizzes.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    score: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    total_questions: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    quiz: Mapped["Quiz"] = relationship("Quiz")
+    responses: Mapped[List["QuizResponse"]] = relationship("QuizResponse", back_populates="attempt", cascade="all, delete-orphan")
+
+
+# -----------------------------------------------------------------------------
+# 12c. QuizResponse
+# -----------------------------------------------------------------------------
+class QuizResponse(Base):
+    __tablename__ = "quiz_responses"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    quiz_attempt_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("quiz_attempts.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("quiz_questions.id", ondelete="CASCADE"), nullable=False)
+    submitted_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    is_correct: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    attempt: Mapped["QuizAttempt"] = relationship("QuizAttempt", back_populates="responses")
+    question: Mapped["QuizQuestion"] = relationship("QuizQuestion")
+
+
+# -----------------------------------------------------------------------------
+# 13. Export
+# -----------------------------------------------------------------------------
+class Export(Base):
+    __tablename__ = "exports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(Text, nullable=False)
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    format: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, default="pending", nullable=False, index=True)
+    storage_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    page_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+# -----------------------------------------------------------------------------
+# 14. ApiKey
+# -----------------------------------------------------------------------------
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    key_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
+    scopes: Mapped[List[str]] = mapped_column(JSONB, default=lambda: ["chat"])
+    rate_limit_policy: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=lambda: {"rpm": 60})
+    status: Mapped[str] = mapped_column(Text, default="active", nullable=False)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# -----------------------------------------------------------------------------
+# 15. UsageEvent
+# -----------------------------------------------------------------------------
+class UsageEvent(Base):
+    __tablename__ = "usage_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    api_key_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    model_provider: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    model_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    latency_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+# -----------------------------------------------------------------------------
+# 16. IngestionJob
 # -----------------------------------------------------------------------------
 class IngestionJob(Base):
     __tablename__ = "ingestion_jobs"
