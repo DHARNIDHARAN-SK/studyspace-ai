@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Mail, Send } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Mail, Send } from "lucide-react";
 import { PublicHeader } from "../components/layout/PublicHeader";
 import { PublicFooter } from "../components/layout/PublicFooter";
 import { Button } from "../components/ui/Button";
+import { submitContactInquiry } from "../lib/api-client";
 
 export function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
@@ -11,11 +12,30 @@ export function ContactPage() {
   const [email, setEmail] = useState("");
   const [institution, setInstitution] = useState("");
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deliveryNote, setDeliveryNote] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !message) return;
-    setSubmitted(true);
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const res = await submitContactInquiry({
+        name: name.trim(),
+        email: email.trim(),
+        institution: institution.trim() || undefined,
+        message: message.trim(),
+      });
+      setSubmitted(true);
+      setDeliveryNote(res.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to submit inquiry. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -48,17 +68,29 @@ export function ContactPage() {
 
         {/* Form or Confirmation */}
         <div className="mt-8 bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-xs">
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           {submitted ? (
             <div className="text-center py-8 space-y-3">
               <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Message Received</h3>
+              <h3 className="text-base font-bold text-slate-900">Inquiry Dispatched</h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                Thank you, {name}. Our academic engineering team has received your inquiry and will follow up with you at {email}.
+                Thank you, {name}. Your inquiry has been forwarded to our lead developer at <span className="font-semibold text-slate-700">karnan284858@gmail.com</span>.
               </p>
+              {deliveryNote && (
+                <p className="text-[11px] text-slate-400 max-w-md mx-auto italic">
+                  {deliveryNote}
+                </p>
+              )}
               <div className="pt-4">
-                <Button variant="outline" size="sm" onClick={() => setSubmitted(false)}>
+                <Button variant="outline" size="sm" onClick={() => { setSubmitted(false); setMessage(""); }}>
                   Send Another Inquiry
                 </Button>
               </div>
@@ -122,8 +154,14 @@ export function ContactPage() {
               </div>
 
               <div className="pt-2">
-                <Button type="submit" size="md" rightIcon={<Send className="w-3.5 h-3.5" />}>
-                  Submit Inquiry
+                <Button
+                  type="submit"
+                  size="md"
+                  disabled={isSubmitting}
+                  leftIcon={isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+                  rightIcon={!isSubmitting ? <Send className="w-3.5 h-3.5" /> : undefined}
+                >
+                  {isSubmitting ? "Dispatching Inquiry..." : "Submit Inquiry"}
                 </Button>
               </div>
             </form>
