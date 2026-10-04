@@ -8,13 +8,36 @@ from app.main import app
 from tests.test_auth import create_test_token
 
 
+from sqlalchemy import delete
+from app.db.models import ApiKey, UsageEvent
+from app.db.session import get_session_factory
+
+
 @pytest.fixture(autouse=True)
-def clean_store():
+async def clean_store():
     store.clear()
     _in_memory_rate_limit.clear()
+    try:
+        session_factory = get_session_factory()
+        if session_factory:
+            async with session_factory() as session:
+                await session.execute(delete(UsageEvent))
+                await session.execute(delete(ApiKey))
+                await session.commit()
+    except Exception:
+        pass
     yield
     store.clear()
     _in_memory_rate_limit.clear()
+    try:
+        session_factory = get_session_factory()
+        if session_factory:
+            async with session_factory() as session:
+                await session.execute(delete(UsageEvent))
+                await session.execute(delete(ApiKey))
+                await session.commit()
+    except Exception:
+        pass
 
 
 @pytest.mark.asyncio

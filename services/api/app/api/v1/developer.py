@@ -19,12 +19,29 @@ from app.schemas.developer import (
 )
 from app.schemas.study import RevisionListResponse
 from app.services.developer_service import DeveloperService
+from app.services.email_service import (
+    DeveloperAccessRequestPayload,
+    EmailDeliveryResult,
+    send_developer_access_request,
+)
 from app.services.study_service import StudyService
 
 # ------------------------------------------------------------------------------
 # 1. Developer Management Router (Web Dashboard, JWT Authenticated)
 # ------------------------------------------------------------------------------
 developer_router = APIRouter(prefix="/developer", tags=["Developer Platform"])
+
+
+@developer_router.post("/requests", response_model=EmailDeliveryResult, status_code=status.HTTP_200_OK)
+async def submit_developer_request(
+    payload: DeveloperAccessRequestPayload,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> EmailDeliveryResult:
+    """
+    Submits a professional Developer API access request.
+    Validates required intake fields and notifies karnan284858@gmail.com before API key issuance.
+    """
+    return send_developer_access_request(payload)
 
 
 @developer_router.post("/keys", response_model=ApiKeyCreatedResponse, status_code=status.HTTP_201_CREATED)

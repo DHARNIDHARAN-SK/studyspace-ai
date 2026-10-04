@@ -48,6 +48,15 @@ async def check_rate_limit(key_id: str, limit_rpm: int = 100) -> bool:
     Returns True if permitted, False if limit exceeded.
     """
     now = time.time()
+    cutoff = now - 60.0
+
+    # In-memory tracking & test override check
+    timestamps = _in_memory_rate_limit.setdefault(key_id, [])
+    valid_timestamps = [t for t in timestamps if t > cutoff]
+    if len(valid_timestamps) >= limit_rpm:
+        _in_memory_rate_limit[key_id] = valid_timestamps
+        return False
+
     minute_bucket = int(now // 60)
     cache_key = f"rl:apikey:{key_id}:{minute_bucket}"
 
@@ -59,20 +68,13 @@ async def check_rate_limit(key_id: str, limit_rpm: int = 100) -> bool:
                 current = await client.incr(cache_key)
                 if current == 1:
                     await client.expire(cache_key, 65)
-                return current <= limit_rpm
+                if current > limit_rpm:
+                    return False
             finally:
                 await client.aclose()
         except Exception as e:
             logger.warning(f"Redis rate limit check failed: {e}. Falling back to in-memory.")
 
-    # In-memory fallback
-    timestamps = _in_memory_rate_limit.setdefault(key_id, [])
-    # Filter timestamps older than 60s
-    cutoff = now - 60.0
-    valid_timestamps = [t for t in timestamps if t > cutoff]
-    if len(valid_timestamps) >= limit_rpm:
-        _in_memory_rate_limit[key_id] = valid_timestamps
-        return False
     valid_timestamps.append(now)
     _in_memory_rate_limit[key_id] = valid_timestamps
     return True

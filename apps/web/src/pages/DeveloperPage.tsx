@@ -1,61 +1,140 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
   Check,
+  CheckCircle2,
   Code,
   Copy,
   Key,
+  Loader2,
   Plus,
+  RefreshCw,
+  Send,
   Shield,
   Trash2,
 } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { Modal } from "../components/ui/Modal";
-import type { ApiKey } from "../types";
+import { useAuth } from "../features/auth/AuthContext";
+import {
+  createApiKey,
+  listApiKeys,
+  revokeApiKey,
+  submitDeveloperAccessRequest,
+} from "../lib/api-client";
+import type { ApiKey, DeveloperAccessRequestInput } from "../types";
 
 export function DeveloperPage() {
-  const [keys, setKeys] = useState<ApiKey[]>([
-    {
-      id: "key-dev-101",
-      workspace_id: "workspace-personal-001",
-      name: "Research Notebook Integration",
-      key_prefix: "sk_live_9a7b...",
-      scopes: ["query:read", "projects:read"],
-      status: "active",
-      last_used_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-      created_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString(),
-    },
-  ]);
+  const { token, user } = useAuth();
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newKeyName, setNewKeyName] = useState("");
+  // Modal states:
+  // Step 1: Intake/Request Form
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [requestData, setRequestData] = useState<DeveloperAccessRequestInput>({
+    name: user?.displayName || "",
+    organization: "",
+    email: user?.email || "",
+    phone: "",
+    intended_use: "",
+    help_needed: "",
+    heard_about: "",
+    additional_message: "",
+  });
+
+  // Step 2: Key Configuration Form
+  const [showKeyConfigModal, setShowKeyConfigModal] = useState(false);
+  const [keyName, setKeyName] = useState("");
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(["chat:write", "retrieval:read"]);
+  const [expiryDays, setExpiryDays] = useState<number>(90);
+  const [isCreatingKey, setIsCreatingKey] = useState(false);
+
+  // Step 3: Raw Key Created Display
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  const handleCreateKey = (e: React.FormEvent) => {
+  const fetchKeys = useCallback(async () => {
+    if (!token) return;
+    try {
+      setIsLoading(true);
+      setError(null);
+      const fetchedKeys = await listApiKeys(token);
+      setKeys(fetchedKeys);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load API keys.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchKeys();
+  }, [fetchKeys]);
+
+  // Handle Step 1 Submit (Intake Request Form)
+  const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKeyName.trim()) return;
+    if (!token) return;
+    setIsSubmittingRequest(true);
+    setError(null);
 
-    const rawSecret = `sk_live_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-    const newEntry: ApiKey = {
-      id: `key-dev-${Date.now()}`,
-      workspace_id: "workspace-personal-001",
-      name: newKeyName.trim(),
-      key_prefix: rawSecret.substring(0, 12) + "...",
-      scopes: ["query:read", "projects:read"],
-      status: "active",
-      created_at: new Date().toISOString(),
-    };
-
-    setKeys([newEntry, ...keys]);
-    setNewKeyName("");
-    setShowCreateModal(false);
-    setCreatedRawKey(rawSecret);
+    try {
+      await submitDeveloperAccessRequest(token, requestData);
+      setShowRequestModal(false);
+      // Proceed to Step 2: Configure and generate key
+      setKeyName(`${requestData.organization || requestData.name} Integration`);
+      setShowKeyConfigModal(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to submit access request.");
+    } finally {
+      setIsSubmittingRequest(false);
+    }
   };
 
-  const handleRevokeKey = (id: string) => {
-    setKeys(keys.filter((k) => k.id !== id));
+  // Handle Step 2 Submit (Generate Key)
+  const handleKeyConfigSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !keyName.trim()) return;
+    setIsCreatingKey(true);
+    setError(null);
+
+    try {
+      const res = await createApiKey(token, {
+        name: keyName.trim(),
+        scopes: selectedScopes,
+        expires_in_days: expiryDays,
+      });
+      setShowKeyConfigModal(false);
+      setCreatedRawKey(res.raw_key);
+      await fetchKeys();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to generate API key.");
+    } finally {
+      setIsCreatingKey(false);
+    }
+  };
+
+  const handleRevokeKey = async (id: string) => {
+    if (!token) return;
+    const confirmRevoke = window.confirm(
+      "Are you sure you want to revoke this API key? This action is immediate and cannot be undone."
+    );
+    if (!confirmRevoke) return;
+
+    setRevokingId(id);
+    try {
+      await revokeApiKey(token, id);
+      setKeys((prev) => prev.filter((k) => k.id !== id));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to revoke API key.");
+    } finally {
+      setRevokingId(null);
+    }
   };
 
   const handleCopyKey = () => {
@@ -63,6 +142,14 @@ export function DeveloperPage() {
       navigator.clipboard.writeText(createdRawKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const toggleScope = (scope: string) => {
+    if (selectedScopes.includes(scope)) {
+      setSelectedScopes(selectedScopes.filter((s) => s !== scope));
+    } else {
+      setSelectedScopes([...selectedScopes, scope]);
     }
   };
 
@@ -81,24 +168,45 @@ export function DeveloperPage() {
             Programmatic access to your workspace documents, search indexes, and grounded RAG endpoints.
           </p>
         </div>
-        <Button
-          onClick={() => setShowCreateModal(true)}
-          size="md"
-          leftIcon={<Plus className="w-4 h-4" />}
-        >
-          Create API Key
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            onClick={() => fetchKeys()}
+            variant="outline"
+            size="sm"
+            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />}
+            disabled={isLoading}
+          >
+            Refresh
+          </Button>
+          <Button
+            onClick={() => {
+              setError(null);
+              setShowRequestModal(true);
+            }}
+            size="sm"
+            leftIcon={<Plus className="w-3.5 h-3.5" />}
+          >
+            Create API Key
+          </Button>
+        </div>
       </div>
 
       {/* Security Banner */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start space-x-3 text-xs text-amber-800">
         <Shield className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
         <div>
-          <span className="font-bold">Credential Protection (Master Architecture Page 7):</span>
-          {" "}Platform API keys store only a cryptographic hash server-side and are displayed only once at creation.
-          Server-side provider credentials (Gemini API keys, database passwords) are strictly protected and never exposed.
+          <span className="font-bold">Credential Protection:</span>
+          {" "}Platform API keys store only a cryptographic SHA-256 hash server-side and are displayed only once at creation.
+          All programmatic requests are rate-limited via Redis and scoped to authorized workspace projects.
         </div>
       </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center space-x-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* API Keys Table Card */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
@@ -108,9 +216,14 @@ export function DeveloperPage() {
           </h2>
         </div>
 
-        {keys.length === 0 ? (
+        {isLoading ? (
+          <div className="p-8 text-center text-xs text-slate-500 flex items-center justify-center space-x-2">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+            <span>Loading API keys...</span>
+          </div>
+        ) : keys.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500">
-            No active API keys found. Create a key to access the REST API.
+            No active API keys found. Click "Create API Key" to submit an access request and provision a key.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -118,10 +231,10 @@ export function DeveloperPage() {
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
                   <th className="px-6 py-3">Key Name</th>
-                  <th className="px-6 py-3">Prefix / Hash</th>
+                  <th className="px-6 py-3">Masked Prefix</th>
                   <th className="px-6 py-3">Allowed Scopes</th>
+                  <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3">Created</th>
-                  <th className="px-6 py-3">Last Used</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -139,20 +252,25 @@ export function DeveloperPage() {
                         ))}
                       </div>
                     </td>
+                    <td className="px-6 py-3.5">
+                      <Badge variant={k.status === "active" ? "emerald" : "slate"}>
+                        {k.status}
+                      </Badge>
+                    </td>
                     <td className="px-6 py-3.5 text-slate-500">
                       {new Date(k.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-3.5 text-slate-500">
-                      {k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : "Never"}
-                    </td>
                     <td className="px-6 py-3.5 text-right">
-                      <button
-                        onClick={() => handleRevokeKey(k.id)}
-                        className="text-slate-400 hover:text-red-600 p-1 rounded-md transition-colors"
-                        title="Revoke API key"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {k.status === "active" && (
+                        <button
+                          onClick={() => handleRevokeKey(k.id)}
+                          disabled={revokingId === k.id}
+                          className="text-red-500 hover:text-red-700 text-xs font-semibold inline-flex items-center space-x-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Revoke</span>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -162,113 +280,293 @@ export function DeveloperPage() {
         )}
       </div>
 
-      {/* Code Examples Card */}
+      {/* Programmatic API Documentation Snippet */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Code className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-              Example API Query Request
-            </h3>
-          </div>
-          <span className="text-[11px] text-slate-400 font-mono">POST /api/v1/query</span>
+        <div className="flex items-center space-x-2">
+          <Code className="w-4 h-4 text-indigo-600" />
+          <h3 className="text-sm font-bold text-slate-900">Programmatic API Quickstart</h3>
         </div>
-
-        <div className="bg-slate-900 text-slate-200 rounded-lg p-4 font-mono text-xs overflow-x-auto leading-relaxed">
-          <pre>{`curl -X POST "http://localhost:8000/api/v1/query" \\
-  -H "Authorization: Bearer sk_live_your_platform_key_here" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "project_id": "7b3b4b5e-...",
-    "query": "What are the primary principles of quantum superposition?",
-    "top_k": 5
-  }'`}</pre>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Authenticate programmatic requests with your secret key using the <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">X-API-Key</code> header:
+        </p>
+        <div className="bg-slate-900 rounded-lg p-4 font-mono text-[11px] text-slate-100 overflow-x-auto space-y-2">
+          <div className="text-slate-400"># 1. Programmatic Chat Query</div>
+          <div>curl -X POST http://localhost:8000/api/v1/dev/chat \</div>
+          <div>  -H "X-API-Key: sk_live_your_secret_key" \</div>
+          <div>  -H "Content-Type: application/json" \</div>
+          <div>{"  -d '{\"message\": \"What is PaaS?\", \"project_id\": \"YOUR_PROJECT_UUID\"}'"}</div>
         </div>
       </div>
 
-      {/* Create Key Modal */}
+      {/* MODAL 1: Professional Developer Access Request Form */}
       <Modal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        title="Create Platform API Key"
-        description="Name your key and assign programmatic access permissions."
+        isOpen={showRequestModal}
+        onClose={() => setShowRequestModal(false)}
+        title="Developer API Access Request"
       >
-        <form onSubmit={handleCreateKey} className="space-y-4 text-xs">
+        <form onSubmit={handleRequestSubmit} className="space-y-4 text-xs font-sans">
+          <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-indigo-800 leading-relaxed text-[11px]">
+            Please tell us about your intended integration. Your request details are reviewed by our engineering lead at <span className="font-semibold">karnan284858@gmail.com</span> before issuing production API keys.
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                Your Full Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={requestData.name}
+                onChange={(e) => setRequestData({ ...requestData, name: e.target.value })}
+                placeholder="Dr. Alan Turing"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                Organization / Institution *
+              </label>
+              <input
+                type="text"
+                required
+                value={requestData.organization}
+                onChange={(e) => setRequestData({ ...requestData, organization: e.target.value })}
+                placeholder="University Research Lab"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                Academic / Contact Email *
+              </label>
+              <input
+                type="email"
+                required
+                value={requestData.email}
+                onChange={(e) => setRequestData({ ...requestData, email: e.target.value })}
+                placeholder="developer@institution.edu"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                Phone / Contact Details *
+              </label>
+              <input
+                type="tel"
+                required
+                value={requestData.phone}
+                onChange={(e) => setRequestData({ ...requestData, phone: e.target.value })}
+                placeholder="+1 555-0199 or 9080284858"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
-              Key Name *
+              Intended API Use *
             </label>
             <input
               type="text"
               required
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="e.g. Python CLI Analysis Script"
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              value={requestData.intended_use}
+              onChange={(e) => setRequestData({ ...requestData, intended_use: e.target.value })}
+              placeholder="e.g. Automated course quiz generation for undergraduate AI syllabus"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
             />
           </div>
 
           <div>
             <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
-              Permitted Scope
+              What help or capability do you need? *
             </label>
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-slate-600">
-              <label className="flex items-center space-x-2">
-                <input type="checkbox" defaultChecked disabled className="rounded text-indigo-600" />
-                <span>query:read (Execute grounded RAG queries within workspace)</span>
-              </label>
-              <label className="flex items-center space-x-2">
-                <input type="checkbox" defaultChecked disabled className="rounded text-indigo-600" />
-                <span>projects:read (List workspace projects & sources)</span>
-              </label>
-            </div>
+            <input
+              type="text"
+              required
+              value={requestData.help_needed}
+              onChange={(e) => setRequestData({ ...requestData, help_needed: e.target.value })}
+              placeholder="e.g. Grounded hybrid RAG endpoints and rate limit allocation"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+            />
           </div>
 
-          <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowCreateModal(false)}>
+          <div>
+            <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              How did you hear about StudySpace AI? *
+            </label>
+            <input
+              type="text"
+              required
+              value={requestData.heard_about}
+              onChange={(e) => setRequestData({ ...requestData, heard_about: e.target.value })}
+              placeholder="e.g. GitHub repository, LinkedIn, Academic conference, Colleague"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Additional Message or Requirements (Optional)
+            </label>
+            <textarea
+              rows={2}
+              value={requestData.additional_message}
+              onChange={(e) => setRequestData({ ...requestData, additional_message: e.target.value })}
+              placeholder="Any custom token quotas, webhook needs, or project scopes..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+            />
+          </div>
+
+          <div className="pt-2 flex items-center justify-end space-x-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRequestModal(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" size="sm">
-              Generate Key
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isSubmittingRequest}
+              leftIcon={isSubmittingRequest ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+              rightIcon={!isSubmittingRequest ? <Send className="w-3.5 h-3.5" /> : undefined}
+            >
+              {isSubmittingRequest ? "Submitting Request..." : "Submit Request & Continue"}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* Raw Key Display Modal */}
+      {/* MODAL 2: Key Configuration Form */}
       <Modal
-        isOpen={!!createdRawKey}
-        onClose={() => setCreatedRawKey(null)}
-        title="Save Your Platform API Key"
-        description="Make sure to copy your API key now as you will not be able to view it again."
+        isOpen={showKeyConfigModal}
+        onClose={() => setShowKeyConfigModal(false)}
+        title="Configure & Issue API Key"
       >
-        <div className="space-y-4 text-xs">
-          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-start space-x-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-            <span>Store this key securely. Anyone with access to this token can query your workspace documents.</span>
+        <form onSubmit={handleKeyConfigSubmit} className="space-y-4 text-xs font-sans">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 text-emerald-800 text-[11px] flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            <span>Intake request verified and notified to lead developer. Now configure your key.</span>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div>
+            <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              API Key Name *
+            </label>
             <input
               type="text"
-              readOnly
-              value={createdRawKey || ""}
-              className="w-full px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg select-all"
+              required
+              value={keyName}
+              onChange={(e) => setKeyName(e.target.value)}
+              placeholder="e.g. Research Pipeline Integration"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
             />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-2">
+              Allowed Scopes *
+            </label>
+            <div className="space-y-2">
+              {[
+                { scope: "chat:write", label: "chat:write — Programmatic RAG chat endpoint" },
+                { scope: "retrieval:read", label: "retrieval:read — Hybrid document retrieval & search" },
+                { scope: "revision:read", label: "revision:read — Read syllabus revision topics" },
+              ].map(({ scope, label }) => (
+                <label key={scope} className="flex items-center space-x-2 text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedScopes.includes(scope)}
+                    onChange={() => toggleScope(scope)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Expiration
+            </label>
+            <select
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+            >
+              <option value={30}>30 Days</option>
+              <option value={90}>90 Days (Recommended)</option>
+              <option value={180}>180 Days</option>
+              <option value={365}>1 Year</option>
+            </select>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end space-x-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={handleCopyKey}
-              leftIcon={copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+              onClick={() => setShowKeyConfigModal(false)}
             >
-              {copied ? "Copied" : "Copy"}
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isCreatingKey || !keyName.trim()}
+              leftIcon={isCreatingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+            >
+              {isCreatingKey ? "Generating Key..." : "Generate API Key"}
             </Button>
           </div>
+        </form>
+      </Modal>
 
-          <div className="flex justify-end pt-2 border-t border-slate-100">
-            <Button type="button" size="sm" onClick={() => setCreatedRawKey(null)}>
-              Done
+      {/* MODAL 3: Raw Key Display (Shown ONCE) */}
+      <Modal
+        isOpen={Boolean(createdRawKey)}
+        onClose={() => setCreatedRawKey(null)}
+        title="Your Secret API Key"
+      >
+        <div className="space-y-4 text-xs font-sans">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] leading-relaxed">
+            <span className="font-bold">Save this key now!</span> For security, StudySpace AI never stores the plaintext secret. You will not be able to view this secret again.
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Secret API Key
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                readOnly
+                value={createdRawKey || ""}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono text-xs select-all focus:outline-none"
+              />
+              <Button
+                type="button"
+                onClick={handleCopyKey}
+                size="sm"
+                variant={copied ? "primary" : "outline"}
+                leftIcon={copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              >
+                {copied ? "Copied!" : "Copy"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="pt-4 flex justify-end">
+            <Button size="sm" onClick={() => setCreatedRawKey(null)}>
+              I Have Saved My Secret Key
             </Button>
           </div>
         </div>

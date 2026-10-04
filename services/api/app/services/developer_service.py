@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.api_key_auth import generate_api_key_pair, hash_api_key
 from app.core.logging import logger
+from app.db.documents import ensure_workspace_hierarchy
 from app.db.models import ApiKey, DocumentChunk, RevisionItem, UsageEvent
 from app.db.repository import store
 from app.rag.retrieval.hybrid_retriever import HybridRetriever
@@ -80,10 +81,15 @@ class DeveloperService:
         # Store in database if available
         if self.db is not None:
             try:
+                ws_uuid = _to_uuid(workspace_id)
+                user_uuid = _to_uuid(user_id)
+                k_uuid = _to_uuid(key_id)
+                await ensure_workspace_hierarchy(self.db, user_uuid, ws_uuid)
+
                 db_key = ApiKey(
-                    id=uuid.UUID(key_id),
-                    workspace_id=uuid.UUID(workspace_id),
-                    created_by_user_id=uuid.UUID(user_id),
+                    id=k_uuid,
+                    workspace_id=ws_uuid,
+                    created_by_user_id=user_uuid,
                     name=name,
                     key_prefix=key_prefix,
                     key_hash=key_hash,
@@ -98,6 +104,10 @@ class DeveloperService:
                 await self.db.refresh(db_key)
             except Exception as e:
                 logger.warning(f"Failed to persist ApiKey to DB: {e}. Writing to MemoryStore.")
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
                 store.api_keys[key_id] = record_data
         else:
             store.api_keys[key_id] = record_data
@@ -116,12 +126,13 @@ class DeveloperService:
 
     async def list_api_keys(self, workspace_id: str) -> List[ApiKeyPublicResponse]:
         keys: List[ApiKeyPublicResponse] = []
+        ws_uuid = _to_uuid(workspace_id)
 
         if self.db is not None:
             try:
                 stmt = (
                     select(ApiKey)
-                    .where(ApiKey.workspace_id == uuid.UUID(workspace_id))
+                    .where(ApiKey.workspace_id == ws_uuid)
                     .order_by(desc(ApiKey.created_at))
                 )
                 result = await self.db.execute(stmt)
@@ -141,9 +152,14 @@ class DeveloperService:
                             revoked_at=k.revoked_at,
                         )
                     )
-                return keys
+                if keys:
+                    return keys
             except Exception as e:
                 logger.warning(f"Failed to query DB for API keys: {e}. Falling back to MemoryStore.")
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
         # Memory store fallback
         for k_id, item in store.api_keys.items():
@@ -169,12 +185,14 @@ class DeveloperService:
     async def revoke_api_key(self, workspace_id: str, key_id: str) -> bool:
         now_utc = datetime.now(timezone.utc)
         found = False
+        ws_uuid = _to_uuid(workspace_id)
+        k_uuid = _to_uuid(key_id)
 
         if self.db is not None:
             try:
                 stmt = (
                     update(ApiKey)
-                    .where(ApiKey.id == uuid.UUID(key_id), ApiKey.workspace_id == uuid.UUID(workspace_id))
+                    .where(ApiKey.id == k_uuid, ApiKey.workspace_id == ws_uuid)
                     .values(status="revoked", revoked_at=now_utc)
                 )
                 res = await self.db.execute(stmt)
@@ -183,6 +201,10 @@ class DeveloperService:
                     found = True
             except Exception as e:
                 logger.warning(f"Failed to revoke key in DB: {e}. Falling back to MemoryStore.")
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
         if key_id in store.api_keys:
             if str(store.api_keys[key_id].get("workspace_id")) == str(workspace_id):
@@ -225,10 +247,13 @@ class DeveloperService:
 
         if self.db is not None:
             try:
+                ws_uuid = _to_uuid(workspace_id)
+                ev_uuid = _to_uuid(event_id)
+                k_uuid = _to_uuid(api_key_id) if api_key_id else None
                 db_event = UsageEvent(
-                    id=uuid.UUID(event_id),
-                    workspace_id=uuid.UUID(workspace_id),
-                    api_key_id=uuid.UUID(api_key_id) if api_key_id else None,
+                    id=ev_uuid,
+                    workspace_id=ws_uuid,
+                    api_key_id=k_uuid,
                     event_type=event_type,
                     model_provider=model_provider,
                     model_id=model_id,
@@ -244,6 +269,10 @@ class DeveloperService:
                 return
             except Exception as e:
                 logger.warning(f"Failed to record usage in DB: {e}. Writing to MemoryStore.")
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
         store.usage_events.append(event_data)
 
@@ -252,12 +281,13 @@ class DeveloperService:
         total_requests = 0
         prompt_tokens = 0
         completion_tokens = 0
+        ws_uuid = _to_uuid(workspace_id)
 
         if self.db is not None:
             try:
                 stmt = (
                     select(UsageEvent)
-                    .where(UsageEvent.workspace_id == uuid.UUID(workspace_id))
+                    .where(UsageEvent.workspace_id == ws_uuid)
                     .order_by(desc(UsageEvent.created_at))
                     .limit(50)
                 )
@@ -282,16 +312,21 @@ class DeveloperService:
                     prompt_tokens += ev.prompt_tokens
                     completion_tokens += ev.completion_tokens
 
-                return DevUsageSummaryResponse(
-                    workspace_id=workspace_id,
-                    total_requests=total_requests,
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=prompt_tokens + completion_tokens,
-                    recent_events=events,
-                )
+                if total_requests > 0:
+                    return DevUsageSummaryResponse(
+                        workspace_id=workspace_id,
+                        total_requests=total_requests,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=prompt_tokens + completion_tokens,
+                        recent_events=events,
+                    )
             except Exception as e:
                 logger.warning(f"Failed to query DB usage summary: {e}. Checking MemoryStore.")
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
         # Memory store fallback
         for ev in reversed(store.usage_events):
@@ -422,15 +457,23 @@ class DeveloperService:
             )
 
         latency_ms = int((time.time() - t0) * 1000)
-        p_tokens = len(user_prompt) // 4
-        c_tokens = len(reply) // 4
+        if hasattr(reply, "content"):
+            reply_text = str(reply.content)
+            model_id = getattr(reply, "model", getattr(self.llm, "model_id", "local-llm"))
+            c_tokens = getattr(reply, "completion_tokens", None) or (len(reply_text) // 4)
+            p_tokens = getattr(reply, "prompt_tokens", None) or (len(user_prompt) // 4)
+        else:
+            reply_text = str(reply)
+            model_id = getattr(self.llm, "model_id", "local-llm")
+            c_tokens = len(reply_text) // 4
+            p_tokens = len(user_prompt) // 4
 
         return DevChatResponse(
             project_id=project_id,
             conversation_id=conv_id,
-            reply=reply,
+            reply=reply_text,
             citations=citations,
-            model=getattr(self.llm, "model_id", "local-llm"),
+            model=model_id,
             latency_ms=latency_ms,
             usage={"prompt_tokens": p_tokens, "completion_tokens": c_tokens, "total_tokens": p_tokens + c_tokens},
         )
