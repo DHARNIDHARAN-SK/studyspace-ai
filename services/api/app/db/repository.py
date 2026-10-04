@@ -61,7 +61,12 @@ class Repository:
                 return ws
 
         now = datetime.now(timezone.utc)
-        ws_id = str(uuid.uuid4())
+        try:
+            user_uuid = uuid.UUID(str(user_id))
+            ws_id = str(uuid.uuid5(user_uuid, "studyspace-default-workspace"))
+        except Exception:
+            ws_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"workspace-{user_id}"))
+
         workspace = {
             "id": ws_id,
             "owner_user_id": user_id,

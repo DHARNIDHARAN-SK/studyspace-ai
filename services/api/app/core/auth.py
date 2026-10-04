@@ -102,7 +102,8 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Authe
     email = payload.get("email")
 
     # Ensure profile and default personal workspace are provisioned
-    Repository.upsert_profile(user_id=user_id, display_name=payload.get("user_metadata", {}).get("full_name"))
+    user_metadata = payload.get("user_metadata") or {}
+    Repository.upsert_profile(user_id=user_id, display_name=user_metadata.get("full_name"))
     workspace = Repository.get_or_create_workspace(user_id=user_id)
 
     return AuthenticatedUser(

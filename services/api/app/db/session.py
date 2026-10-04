@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import AsyncGenerator, Optional
 from sqlalchemy import text
@@ -56,6 +57,7 @@ def get_engine() -> Optional[AsyncEngine]:
                     async_url,
                     poolclass=NullPool,
                     echo=settings.DEBUG,
+                    connect_args={"timeout": 2.0},
                 )
             else:
                 _engine = create_async_engine(
@@ -64,6 +66,7 @@ def get_engine() -> Optional[AsyncEngine]:
                     max_overflow=20,
                     pool_pre_ping=True,
                     echo=settings.DEBUG,
+                    connect_args={"timeout": 5.0},
                 )
             logger.info("Initialized SQLAlchemy async engine for PostgreSQL.")
     return _engine
@@ -103,6 +106,25 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+async def get_db_optional() -> AsyncGenerator[Optional[AsyncSession], None]:
+    """
+    FastAPI dependency yielding an async database session if available,
+    or None if the database is offline or not configured.
+    """
+    session_factory = get_session_factory()
+    if session_factory is None:
+        yield None
+        return
+
+    async with session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
 async def check_db_health() -> dict:
     """
     Verifies live PostgreSQL database connectivity, pgvector extension,
@@ -119,33 +141,36 @@ async def check_db_health() -> dict:
 
     start_time = time.perf_counter()
     try:
-        async with engine.connect() as conn:
-            # 1. Connectivity test
-            await conn.execute(text("SELECT 1"))
+        async def _ping():
+            async with engine.connect() as conn:
+                # 1. Connectivity test
+                await conn.execute(text("SELECT 1"))
 
-            # 2. Check pgvector extension
-            res_ext = await conn.execute(
-                text("SELECT default_version, installed_version FROM pg_available_extensions WHERE name = 'vector'")
-            )
-            ext_row = res_ext.fetchone()
-            pgvector_installed = bool(ext_row and ext_row[1] is not None)
-            pgvector_version = ext_row[1] if (ext_row and ext_row[1]) else None
+                # 2. Check pgvector extension
+                res_ext = await conn.execute(
+                    text("SELECT default_version, installed_version FROM pg_available_extensions WHERE name = 'vector'")
+                )
+                ext_row = res_ext.fetchone()
+                pgvector_installed = bool(ext_row and ext_row[1] is not None)
+                pgvector_version = ext_row[1] if (ext_row and ext_row[1]) else None
 
-            # 3. Check public schema table count
-            res_tables = await conn.execute(
-                text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
-            )
-            table_count = res_tables.scalar() or 0
+                # 3. Check public schema table count
+                res_tables = await conn.execute(
+                    text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
+                )
+                table_count = res_tables.scalar() or 0
+                return pgvector_installed, pgvector_version, table_count
 
-            latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        pgvector_installed, pgvector_version, table_count = await asyncio.wait_for(_ping(), timeout=2.0)
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-            return {
-                "status": "healthy",
-                "pgvector_installed": pgvector_installed,
-                "pgvector_version": pgvector_version,
-                "table_count": table_count,
-                "latency_ms": latency_ms,
-            }
+        return {
+            "status": "healthy",
+            "pgvector_installed": pgvector_installed,
+            "pgvector_version": pgvector_version,
+            "table_count": table_count,
+            "latency_ms": latency_ms,
+        }
     except Exception as e:
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
         logger.warning(f"Database health check failed: {e}")
@@ -153,5 +178,7 @@ async def check_db_health() -> dict:
             "status": "unreachable",
             "error": str(e),
             "pgvector_installed": False,
+            "pgvector_version": None,
+            "table_count": 0,
             "latency_ms": latency_ms,
         }

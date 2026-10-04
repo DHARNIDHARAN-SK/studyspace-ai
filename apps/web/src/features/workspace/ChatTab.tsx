@@ -57,22 +57,29 @@ export function ChatTab({ project }: ChatTabProps) {
   const [isPreviewingRewrite, setIsPreviewingRewrite] = useState(false);
   const [rewritePreview, setRewritePreview] = useState<RewritePreviewResponse | null>(null);
 
+  const initialLoadDoneRef = React.useRef(false);
+
   // Fetch project conversations on mount
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (selectFirst = false) => {
     if (!token) return;
     try {
       const convList = await listConversations(token, project.id);
       setConversations(convList);
-      if (convList.length > 0 && !activeConvId) {
+      if (selectFirst && convList.length > 0) {
         setActiveConvId(convList[0].id);
       }
     } catch (err) {
       console.warn("Could not load conversations:", err);
     }
-  }, [token, project.id, activeConvId]);
+  }, [token, project.id]);
 
   useEffect(() => {
-    fetchConversations();
+    if (!initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true;
+      fetchConversations(true);
+    } else {
+      fetchConversations(false);
+    }
   }, [fetchConversations]);
 
   // Fetch messages when active conversation changes

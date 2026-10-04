@@ -29,12 +29,13 @@ async def ensure_tenant_hierarchy(
     if not profile:
         # Also ensure auth.users record exists if foreign key exists in schema
         try:
-            await session.execute(
-                text(
-                    "INSERT INTO auth.users (id, email) VALUES (:id, :email) ON CONFLICT (id) DO NOTHING"
-                ),
-                {"id": user_id, "email": f"user-{user_id}@studyspace.ai"},
-            )
+            async with session.begin_nested():
+                await session.execute(
+                    text(
+                        "INSERT INTO auth.users (id, email) VALUES (:id, :email) ON CONFLICT (id) DO NOTHING"
+                    ),
+                    {"id": user_id, "email": f"user-{user_id}@studyspace.ai"},
+                )
         except Exception:
             pass  # Schema might not have auth schema in sqlite/mock test environments
 
@@ -45,13 +46,18 @@ async def ensure_tenant_hierarchy(
     # 2. Check or insert workspace
     workspace = await session.get(Workspace, workspace_id)
     if not workspace:
-        workspace = Workspace(
-            id=workspace_id,
-            owner_user_id=user_id,
-            name="Personal Workspace",
-        )
-        session.add(workspace)
-        await session.flush()
+        existing_ws_stmt = select(Workspace).where(Workspace.owner_user_id == user_id)
+        existing_ws = (await session.execute(existing_ws_stmt)).scalars().first()
+        if existing_ws:
+            workspace = existing_ws
+        else:
+            workspace = Workspace(
+                id=workspace_id,
+                owner_user_id=user_id,
+                name="Personal Workspace",
+            )
+            session.add(workspace)
+            await session.flush()
 
     # 3. Check or insert project
     project = await session.get(Project, project_id)
@@ -68,20 +74,22 @@ async def ensure_tenant_hierarchy(
 
         project = Project(
             id=project_id,
-            workspace_id=workspace_id,
+            workspace_id=workspace.id,
             name=project_name,
             subject=project_subject,
         )
         session.add(project)
         await session.flush()
     else:
-        # Verify project belongs to workspace
-        if project.workspace_id != workspace_id:
-            raise AppError(
-                code="PROJECT_WORKSPACE_MISMATCH",
-                message="Project does not belong to the authorized workspace.",
-                status_code=403,
-            )
+        # Verify project belongs to workspace or user
+        if project.workspace_id != workspace_id and project.workspace_id != workspace.id:
+            proj_ws = await session.get(Workspace, project.workspace_id)
+            if not (proj_ws and proj_ws.owner_user_id == user_id):
+                raise AppError(
+                    code="PROJECT_WORKSPACE_MISMATCH",
+                    message="Project does not belong to the authorized workspace.",
+                    status_code=403,
+                )
 
     return project
 

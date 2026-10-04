@@ -61,6 +61,7 @@ export function ConversationSidebar({
         <Button
           onClick={onNewChat}
           size="sm"
+          variant={!activeId ? "primary" : "outline"}
           className="w-full"
           leftIcon={<Plus className="w-3.5 h-3.5" />}
         >
