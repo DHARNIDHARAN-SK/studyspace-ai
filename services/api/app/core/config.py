@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: Union[List[str], str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGIN_REGEX: Optional[str] = r"^https:\/\/(studyspace-ai|studyspace-[a-zA-Z0-9_-]+-dharanidharan2)\.vercel\.app$"
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

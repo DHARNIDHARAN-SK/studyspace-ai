@@ -18,7 +18,15 @@ import type {
   UserProfile,
 } from "../types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+function getApiBaseUrl(): string {
+  const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, "");
+  }
+  return "";
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 async function fetchWithAuth<T>(
   path: string,
@@ -130,11 +138,22 @@ export async function uploadDocument(
   const headers = new Headers();
   headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/documents`, {
-    method: "POST",
-    headers,
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/documents`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+  } catch (netErr: unknown) {
+    const originalMsg = netErr instanceof Error ? netErr.message : String(netErr);
+    if (originalMsg.toLowerCase().includes("failed to fetch") || originalMsg.toLowerCase().includes("networkerror")) {
+      throw new Error(
+        `Unable to reach the backend service (${API_BASE_URL || "unconfigured URL"}). Please ensure the backend and tunnel are reachable.`
+      );
+    }
+    throw new Error(`Network error during upload: ${originalMsg}`);
+  }
 
   if (!response.ok) {
     let errorMsg = `Upload failed (${response.status})`;
