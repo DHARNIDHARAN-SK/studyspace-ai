@@ -76,5 +76,22 @@ export function formatAuthError(error: unknown): string {
     return "Unable to connect to the authentication service. Please check your network connection.";
   }
 
+  if (
+    lower.includes("bad_oauth_callback") ||
+    lower.includes("oauth state parameter missing") ||
+    lower.includes("oauth_error") ||
+    lower.includes("access_denied")
+  ) {
+    return "Authentication was cancelled or the OAuth callback was invalid. Please try signing in again.";
+  }
+
+  if (
+    lower.includes("unsupported_provider") ||
+    lower.includes("provider is not enabled") ||
+    lower.includes("oauth provider is not enabled")
+  ) {
+    return "This OAuth provider is not currently configured or enabled in the authentication settings.";
+  }
+
   return rawMessage;
 }

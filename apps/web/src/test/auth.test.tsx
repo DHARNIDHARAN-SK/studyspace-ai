@@ -9,6 +9,7 @@ import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
 import { ProtectedRoute } from "../features/auth/ProtectedRoute";
 import { PublicAuthRoute } from "../features/auth/PublicAuthRoute";
+import { getAuthRedirectUrl } from "../lib/supabase";
 import * as AuthContextModule from "../features/auth/AuthContext";
 
 // Mock AuthContext
@@ -396,5 +397,24 @@ describe("Route Protection", () => {
 
     expect(screen.getByText(/Checking authentication\.\.\./i)).toBeInTheDocument();
     expect(screen.queryByText(/Protected Content/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("OAuth Redirect URL Resolution", () => {
+  it("resolves default path to dashboard on current origin", () => {
+    const url = getAuthRedirectUrl();
+    expect(url).toContain("/dashboard");
+    expect(url.startsWith("http")).toBe(true);
+  });
+
+  it("resolves custom path correctly", () => {
+    const url = getAuthRedirectUrl("/reset-password");
+    expect(url).toContain("/reset-password");
+  });
+
+  it("formats OAuth cancellation and callback errors", () => {
+    expect(formatAuthError("bad_oauth_callback")).toContain("Authentication was cancelled or the OAuth callback was invalid");
+    expect(formatAuthError("OAuth state parameter missing")).toContain("Authentication was cancelled or the OAuth callback was invalid");
+    expect(formatAuthError("access_denied")).toContain("Authentication was cancelled or the OAuth callback was invalid");
   });
 });

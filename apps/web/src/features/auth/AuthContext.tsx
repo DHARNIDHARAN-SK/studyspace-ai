@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
-import { isSupabaseConfigured, supabase } from "../../lib/supabase";
+import { getAuthRedirectUrl, isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { getProfile } from "../../lib/api-client";
 import type { UserProfile } from "../../types";
 
@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           full_name: displayName?.trim() || "",
         },
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: getAuthRedirectUrl("/dashboard"),
       },
     });
     if (error) throw error;
@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: getAuthRedirectUrl("/dashboard"),
       },
     });
     if (error) throw error;
@@ -180,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Supabase is not configured. Please verify your environment variables.");
     }
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: getAuthRedirectUrl("/reset-password"),
     });
     if (error) throw error;
   };
